@@ -75,7 +75,7 @@ class Database:
                     # 创建新版本记录
                     version = ClauseVersion(
                         clause_uuid=existing_clause.uuid,
-                        version_number=existing_clause.version_number + 1,
+                        version_number=existing_clause.version_number,  # 保存当前版本
                         title=existing_clause.title,
                         content=existing_clause.content,
                         created_at=existing_clause.updated_at
@@ -197,25 +197,26 @@ class Database:
         """更新条款内容"""
         clause = self.session.query(Clause).filter_by(uuid=uuid).first()
         if clause:
-            # 创建新版本记录
-            version = ClauseVersion(
-                clause_uuid=clause.uuid,
-                version_number=clause.version_number + 1,
-                title=clause.title,
-                content=clause.content,
-                created_at=clause.updated_at
-            )
-            self.session.add(version)
-            
-            # 更新条款
-            if title:
-                clause.title = title
-            if content:
+            # 只有当内容有变化时才创建新版本
+            if content and content != clause.content:
+                # 创建新版本记录
+                version = ClauseVersion(
+                    clause_uuid=clause.uuid,
+                    version_number=clause.version_number,  # 保存当前版本
+                    title=clause.title,
+                    content=clause.content,
+                    created_at=clause.updated_at
+                )
+                self.session.add(version)
+                
+                # 更新条款
+                if title:
+                    clause.title = title
                 clause.content = content
-            clause.version_number += 1
-            clause.updated_at = datetime.utcnow()
-            self.session.commit()
-            return True
+                clause.version_number += 1
+                clause.updated_at = datetime.utcnow()
+                self.session.commit()
+                return True
         return False
 
     def get_clause_versions(self, uuid):
@@ -250,16 +251,10 @@ class Database:
         if len(versions) <= 1:
             return False
         
-        # 如果要删除的是当前版本
+        # 如果要删除的是当前版本，不允许删除
         clause = self.session.query(Clause).filter_by(uuid=uuid).first()
         if clause.version_number == version_number:
-            # 获取下一个最新的版本
-            next_version = next(v for v in versions if v.version_number != version_number)
-            # 更新当前条款为下一个版本
-            clause.title = next_version.title
-            clause.content = next_version.content
-            clause.version_number = next_version.version_number
-            clause.updated_at = next_version.created_at
+            return False
         
         # 删除指定版本
         self.session.query(ClauseVersion).filter_by(
@@ -272,28 +267,19 @@ class Database:
 
     def activate_clause_version(self, uuid, version_number):
         """激活指定版本的条款"""
-        # 获取要激活的版本
-        if version_number == self.session.query(Clause).filter_by(uuid=uuid).first().version_number:
+        # 如果要激活的版本就是当前版本，不做任何操作
+        clause = self.session.query(Clause).filter_by(uuid=uuid).first()
+        if clause.version_number == version_number:
             return True
             
+        # 获取要激活的版本
         version = self.session.query(ClauseVersion).filter_by(
             clause_uuid=uuid,
             version_number=version_number
         ).first()
         
         if version:
-            # 创建新版本记录（保存当前版本）
-            clause = self.session.query(Clause).filter_by(uuid=uuid).first()
-            current_version = ClauseVersion(
-                clause_uuid=clause.uuid,
-                version_number=clause.version_number,
-                title=clause.title,
-                content=clause.content,
-                created_at=clause.updated_at
-            )
-            self.session.add(current_version)
-            
-            # 更新当前条款
+            # 更新当前条款为选中的版本
             clause.title = version.title
             clause.content = version.content
             clause.version_number = version.version_number
