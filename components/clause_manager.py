@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from .database import Database
+from .version_manager import render_version_timeline
 import io
 
 def export_clauses(clauses, format):
@@ -9,6 +10,19 @@ def export_clauses(clauses, format):
     db = Database()
     clause_uuids = [clause['UUID'] for clause in clauses]
     return db.export_selected_clauses(clause_uuids, format)
+
+def handle_version_select(db, clause_uuid, version):
+    """处理版本选择"""
+    db.activate_clause_version(clause_uuid, version)
+    st.rerun()
+
+def handle_version_delete(db, clause_uuid, version):
+    """处理版本删除"""
+    if db.delete_clause_version(clause_uuid, version):
+        st.success("版本删除成功")
+        st.rerun()
+    else:
+        st.error("无法删除最后一个版本")
 
 def render_clause_manager():
     st.markdown("""
@@ -289,14 +303,13 @@ def render_clause_manager():
                 with st.expander(f"{i+1}. {clause['扩展条款标题']} (版本 {clause['版本号']})", expanded=False):
                     # 获取条款版本历史
                     versions = db.get_clause_versions(clause['UUID'])
-                    version_numbers = [v.version_number for v in versions]
                     
-                    # 版本选择
-                    selected_version = st.selectbox(
-                        "选择版本",
-                        version_numbers,
-                        index=version_numbers.index(clause['版本号']) if clause['版本号'] in version_numbers else 0,
-                        key=f"version_{i}"
+                    # 渲染版本时间线
+                    render_version_timeline(
+                        versions,
+                        clause['版本号'],
+                        lambda version: handle_version_select(db, clause['UUID'], version),
+                        lambda version: handle_version_delete(db, clause['UUID'], version)
                     )
                     
                     # 显示当前版本内容
@@ -307,30 +320,12 @@ def render_clause_manager():
                         key=f"edit_{i}"
                     )
                     
-                    cols = st.columns([1, 1, 1])
-                    with cols[0]:
-                        if st.button("保存", key=f"save_{i}"):
-                            db.update_clause(
-                                clause['UUID'],
-                                content=edited_content
-                            )
-                            st.success("保存成功")
-                            st.rerun()
-                    
-                    with cols[1]:
-                        if st.button("激活此版本", key=f"activate_{i}"):
-                            db.activate_clause_version(
-                                clause['UUID'],
-                                selected_version
-                            )
-                            st.success("版本已激活")
-                            st.rerun()
-                    
-                    with cols[2]:
-                        if st.button("删除", key=f"delete_{i}"):
-                            st.session_state.selected_clauses.pop(i)
-                            if i in st.session_state.selected_indices:
-                                st.session_state.selected_indices.remove(i)
-                            st.rerun()
+                    if st.button("保存", key=f"save_{i}"):
+                        db.update_clause(
+                            clause['UUID'],
+                            content=edited_content
+                        )
+                        st.success("保存成功")
+                        st.rerun()
         else:
             st.info("还未选择任何条款")
