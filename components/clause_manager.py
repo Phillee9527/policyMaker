@@ -27,6 +27,8 @@ def render_clause_manager():
         st.session_state.selected_clauses = []
     if 'selected_indices' not in st.session_state:
         st.session_state.selected_indices = set()
+    if 'previous_selection' not in st.session_state:
+        st.session_state.previous_selection = []
     
     # 创建两列布局
     col1, col2 = st.columns([2, 1])
@@ -146,6 +148,7 @@ def render_clause_manager():
                     # 全选时，将所有筛选后的条款添加到已选列表
                     st.session_state.selected_indices = set(filtered_df.index.tolist())
                     st.session_state.selected_clauses = filtered_df.to_dict('records')
+                    st.rerun()
                 
                 # 使用container和custom CSS来控制表格宽度
                 with st.container():
@@ -176,6 +179,7 @@ def render_clause_manager():
                         edited_df,
                         hide_index=True,
                         use_container_width=True,
+                        key=f"data_editor_{current_page}",
                         column_config={
                             "选择": st.column_config.CheckboxColumn(
                                 "选择",
@@ -231,8 +235,11 @@ def render_clause_manager():
                         for idx in sorted(st.session_state.selected_indices)
                     ]
                     
-                    # 强制重新渲染
-                    st.rerun()
+                    # 检查选择状态是否发生变化
+                    current_selection = [c['UUID'] for c in st.session_state.selected_clauses]
+                    if current_selection != st.session_state.previous_selection:
+                        st.session_state.previous_selection = current_selection
+                        st.rerun()
             else:
                 st.info("没有找到匹配的条款")
         else:
