@@ -15,7 +15,6 @@ class Clause(Base):
     __tablename__ = 'clauses'
 
     id = Column(Integer, primary_key=True)
-    number = Column(Integer, nullable=False)  # 序号
     uuid = Column(String(50), unique=True, nullable=False)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=False)
@@ -56,49 +55,69 @@ class Database:
         if not all(col in df.columns for col in required_columns):
             raise ValueError("导入的数据缺少必要的列")
 
-        # 获取当前最大序号
-        max_number = self.session.query(Clause).with_entities(Clause.number).order_by(Clause.number.desc()).first()
-        start_number = (max_number[0] if max_number else 0) + 1
+        # 验证UUID不为空且不重复
+        if df['UUID'].isnull().any():
+            raise ValueError("存在空的UUID")
+        if df['UUID'].duplicated().any():
+            raise ValueError("存在重复的UUID")
 
-        for i, row in df.iterrows():
-            clause = Clause(
-                number=start_number + i,
-                uuid=row['UUID'],
-                title=row['扩展条款标题'],
-                content=row['扩展条款正文'],
-                pinyin=row['PINYIN'],
-                quanpin=row['QUANPIN'],
-                insurance_type=row['险种'],
-                company=row['保险公司'],
-                version=row['年度版本']
-            )
-            existing_clause = self.session.query(Clause).filter_by(uuid=row['UUID']).first()
+        # 记录新增和更新的条款数量
+        new_count = 0
+        update_count = 0
+
+        for _, row in df.iterrows():
+            uuid = row['UUID']
+            existing_clause = self.session.query(Clause).filter_by(uuid=uuid).first()
+            
             if existing_clause:
-                # 创建新版本
-                version = ClauseVersion(
-                    clause_uuid=existing_clause.uuid,
-                    version_number=existing_clause.version_number + 1,
-                    title=existing_clause.title,
-                    content=existing_clause.content
-                )
-                self.session.add(version)
-                # 更新现有条款
-                existing_clause.title = row['扩展条款标题']
-                existing_clause.content = row['扩展条款正文']
-                existing_clause.version_number += 1
-                existing_clause.updated_at = datetime.utcnow()
+                # 只有当内容有变化时才创建新版本
+                if existing_clause.content != row['扩展条款正文']:
+                    # 创建新版本记录
+                    version = ClauseVersion(
+                        clause_uuid=existing_clause.uuid,
+                        version_number=existing_clause.version_number + 1,
+                        title=existing_clause.title,
+                        content=existing_clause.content
+                    )
+                    self.session.add(version)
+                    
+                    # 更新条款
+                    existing_clause.title = row['扩展条款标题']
+                    existing_clause.content = row['扩展条款正文']
+                    existing_clause.pinyin = row['PINYIN']
+                    existing_clause.quanpin = row['QUANPIN']
+                    existing_clause.insurance_type = row['险种']
+                    existing_clause.company = row['保险公司']
+                    existing_clause.version = row['年度版本']
+                    existing_clause.version_number += 1
+                    existing_clause.updated_at = datetime.utcnow()
+                    update_count += 1
             else:
-                self.session.add(clause)
+                # 创建新条款
+                new_clause = Clause(
+                    uuid=uuid,
+                    title=row['扩展条款标题'],
+                    content=row['扩展条款正文'],
+                    pinyin=row['PINYIN'],
+                    quanpin=row['QUANPIN'],
+                    insurance_type=row['险种'],
+                    company=row['保险公司'],
+                    version=row['年度版本']
+                )
+                self.session.add(new_clause)
+                new_count += 1
+
         self.session.commit()
+        return new_count, update_count
 
     def export_clauses(self, format='dataframe'):
         """导出条款数据"""
         clauses = self.session.query(Clause).filter_by(is_active=True).all()
         data = []
-        for clause in clauses:
+        for i, clause in enumerate(clauses, 1):
             data.append({
                 'UUID': clause.uuid,
-                '序号': clause.number,
+                '序号': i,
                 '扩展条款标题': clause.title,
                 '扩展条款正文': clause.content,
                 'PINYIN': clause.pinyin,
@@ -131,10 +150,9 @@ class Database:
         
         if format == 'xlsx':
             data = []
-            for clause in clauses:
+            for i, clause in enumerate(clauses, 1):
                 data.append({
-                    'UUID': clause.uuid,
-                    '序号': clause.number,
+                    '序号': i,
                     '扩展条款标题': clause.title,
                     '扩展条款正文': clause.content,
                     '险种': clause.insurance_type,
@@ -150,8 +168,8 @@ class Database:
         elif format == 'docx':
             from docx import Document
             doc = Document()
-            for clause in clauses:
-                doc.add_heading(clause.title, level=1)
+            for i, clause in enumerate(clauses, 1):
+                doc.add_heading(f"{i}. {clause.title}", level=1)
                 doc.add_paragraph(clause.content)
                 doc.add_paragraph(f"险种：{clause.insurance_type}")
                 doc.add_paragraph(f"保险公司：{clause.company}")
@@ -165,8 +183,8 @@ class Database:
         
         elif format == 'markdown':
             content = ""
-            for clause in clauses:
-                content += f"# {clause.title}\n\n"
+            for i, clause in enumerate(clauses, 1):
+                content += f"# {i}. {clause.title}\n\n"
                 content += f"{clause.content}\n\n"
                 content += f"险种：{clause.insurance_type}\n\n"
                 content += f"保险公司：{clause.company}\n\n"
@@ -239,12 +257,36 @@ class Database:
     def import_database(self, db_data):
         """导入数据库"""
         try:
+            # 先关闭当前会话
+            self.session.close()
+            
+            # 备份现有数据库（如果存在）
+            if os.path.exists(self.db_path):
+                backup_path = f"{self.db_path}.bak"
+                os.rename(self.db_path, backup_path)
+            
+            # 写入新数据库
             with open(self.db_path, 'wb') as f:
                 f.write(db_data)
+            
+            # 重新创建会话
+            self.engine = create_engine(f'sqlite:///{self.db_path}')
+            Session = sessionmaker(bind=self.engine)
+            self.session = Session()
+            
             return True
         except Exception as e:
             print(f"导入数据库失败：{str(e)}")
+            # 恢复备份
+            if os.path.exists(f"{self.db_path}.bak"):
+                if os.path.exists(self.db_path):
+                    os.remove(self.db_path)
+                os.rename(f"{self.db_path}.bak", self.db_path)
             return False
+        finally:
+            # 清理备份文件
+            if os.path.exists(f"{self.db_path}.bak"):
+                os.remove(f"{self.db_path}.bak")
 
     def __del__(self):
         """关闭数据库连接"""
