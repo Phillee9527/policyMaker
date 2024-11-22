@@ -1,6 +1,24 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+from .database import Database
+import io
+
+def export_clauses(clauses, format):
+    """导出选中的条款"""
+    if format == 'xlsx':
+        output = io.BytesIO()
+        df = pd.DataFrame(clauses)
+        df.to_excel(output, index=False)
+        return output.getvalue()
+    elif format == 'docx':
+        db = Database()
+        clause_uuids = [clause['uuid'] for clause in clauses]
+        return db.export_selected_clauses(clause_uuids, 'docx')
+    elif format == 'markdown':
+        db = Database()
+        clause_uuids = [clause['uuid'] for clause in clauses]
+        return db.export_selected_clauses(clause_uuids, 'markdown')
 
 def render_clause_manager():
     st.markdown("""
@@ -11,9 +29,10 @@ def render_clause_manager():
     </style>
     """, unsafe_allow_html=True)
     
+    # 初始化数据库
+    db = Database()
+    
     # 初始化session state
-    if 'clauses_df' not in st.session_state:
-        st.session_state.clauses_df = None
     if 'selected_clauses' not in st.session_state:
         st.session_state.selected_clauses = []
     if 'selected_indices' not in st.session_state:
@@ -25,6 +44,31 @@ def render_clause_manager():
     with col1:
         st.header("条款管理")
         
+        # 数据库操作
+        db_col1, db_col2, db_col3 = st.columns(3)
+        with db_col1:
+            if st.button("清空数据库"):
+                db.clear_database()
+                st.success("数据库已清空")
+                st.rerun()
+        
+        with db_col2:
+            exported_db = db.export_database()
+            if exported_db:
+                st.download_button(
+                    "导出数据库",
+                    exported_db,
+                    file_name="clauses.db",
+                    mime="application/octet-stream"
+                )
+        
+        with db_col3:
+            uploaded_db = st.file_uploader("导入数据库", type=['db'])
+            if uploaded_db:
+                db.import_database(uploaded_db.read())
+                st.success("数据库导入成功")
+                st.rerun()
+        
         # 文件上传
         uploaded_file = st.file_uploader("导入条款库", type=['csv', 'xlsx'])
         if uploaded_file is not None:
@@ -33,12 +77,14 @@ def render_clause_manager():
                     df = pd.read_csv(uploaded_file)
                 else:
                     df = pd.read_excel(uploaded_file)
-                st.session_state.clauses_df = df
+                db.import_clauses(df)
                 st.success("条款库导入成功！")
             except Exception as e:
                 st.error(f"文件导入错误：{str(e)}")
         
-        if st.session_state.clauses_df is not None:
+        # 获取所有条款
+        clauses_df = db.export_clauses('dataframe')
+        if not clauses_df.empty:
             # 创建筛选条件
             st.subheader("筛选条件")
             filter_cols = st.columns(3)
@@ -46,11 +92,11 @@ def render_clause_manager():
             # 动态生成筛选框
             filters = {}
             exclude_columns = ['UUID', 'PINYIN', 'QUANPIN', '扩展条款正文']
-            filter_columns = [col for col in st.session_state.clauses_df.columns if col not in exclude_columns]
+            filter_columns = [col for col in clauses_df.columns if col not in exclude_columns]
             
             for i, col in enumerate(filter_columns):
                 with filter_cols[i % 3]:
-                    unique_values = sorted(st.session_state.clauses_df[col].unique())
+                    unique_values = sorted(clauses_df[col].unique())
                     filters[col] = st.multiselect(
                         f"选择{col}",
                         options=unique_values,
@@ -65,7 +111,7 @@ def render_clause_manager():
             )
             
             # 应用筛选条件
-            filtered_df = st.session_state.clauses_df.copy()
+            filtered_df = clauses_df.copy()
             
             # 应用搜索条件
             if search_term:
@@ -106,18 +152,7 @@ def render_clause_manager():
             if select_all:
                 # 全选时，将所有筛选后的条款添加到已选列表
                 st.session_state.selected_indices = set(filtered_df.index.tolist())
-                st.session_state.selected_clauses = [
-                    st.session_state.clauses_df.iloc[idx].to_dict() 
-                    for idx in st.session_state.selected_indices
-                ]
-            
-            # 创建数据表格
-            edited_df = pd.DataFrame({
-                "选择": [idx in st.session_state.selected_indices for idx in filtered_df.index[start_idx:end_idx]],
-                "序号": display_df['序号'].astype(str),
-                "条款名称": display_df['扩展条款标题'],
-                "条款正文": display_df['扩展条款正文'].str[:100] + '...'
-            })
+                st.session_state.selected_clauses = filtered_df.to_dict('records')
             
             # 使用container和custom CSS来控制表格宽度
             with st.container():
@@ -128,6 +163,15 @@ def render_clause_manager():
                     }
                 </style>
                 """, unsafe_allow_html=True)
+                
+                # 创建数据表格
+                edited_df = pd.DataFrame({
+                    "选择": [idx in st.session_state.selected_indices for idx in filtered_df.index[start_idx:end_idx]],
+                    "序号": display_df['序号'].astype(str),
+                    "条款名称": display_df['扩展条款标题'],
+                    "条款正文": display_df['扩展条款正文'].str[:100] + '...',
+                    "版本": display_df['版本号'].astype(str)
+                })
                 
                 # 显示数据表格
                 edited_result = st.data_editor(
@@ -158,6 +202,12 @@ def render_clause_manager():
                             help="条款内容预览",
                             disabled=True,
                             width="large"
+                        ),
+                        "版本": st.column_config.TextColumn(
+                            "版本号",
+                            help="条款版本",
+                            disabled=True,
+                            width="small"
                         )
                     }
                 )
@@ -179,7 +229,7 @@ def render_clause_manager():
                 
                 # 更新选中的条款
                 st.session_state.selected_clauses = [
-                    st.session_state.clauses_df.iloc[idx].to_dict() 
+                    filtered_df.iloc[idx].to_dict()
                     for idx in sorted(st.session_state.selected_indices)
                 ]
     
@@ -187,8 +237,57 @@ def render_clause_manager():
     with col2:
         st.header("已选条款")
         if st.session_state.selected_clauses:
+            # 导出选项
+            export_format = st.selectbox(
+                "导出格式",
+                ["XLSX", "DOCX", "Markdown"],
+                key="export_format"
+            )
+            
+            if st.button("导出选中条款"):
+                export_data = export_clauses(
+                    st.session_state.selected_clauses,
+                    export_format.lower()
+                )
+                
+                if export_format == "XLSX":
+                    st.download_button(
+                        "下载Excel文件",
+                        export_data,
+                        file_name="selected_clauses.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                elif export_format == "DOCX":
+                    st.download_button(
+                        "下载Word文件",
+                        export_data,
+                        file_name="selected_clauses.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    )
+                elif export_format == "Markdown":
+                    st.download_button(
+                        "下载Markdown文件",
+                        export_data,
+                        file_name="selected_clauses.md",
+                        mime="text/markdown"
+                    )
+            
+            # 显示已选条款
             for i, clause in enumerate(st.session_state.selected_clauses):
-                with st.expander(f"{i+1}. {clause['扩展条款标题']}", expanded=False):
+                with st.expander(f"{i+1}. {clause['扩展条款标题']} (版本 {clause['版本号']})", expanded=False):
+                    # 获取条款版本历史
+                    versions = db.get_clause_versions(clause['UUID'])
+                    version_numbers = [v.version_number for v in versions]
+                    
+                    # 版本选择
+                    selected_version = st.selectbox(
+                        "选择版本",
+                        version_numbers,
+                        index=version_numbers.index(clause['版本号']) if clause['版本号'] in version_numbers else 0,
+                        key=f"version_{i}"
+                    )
+                    
+                    # 显示当前版本内容
                     edited_content = st.text_area(
                         "编辑条款内容",
                         value=clause['扩展条款正文'],
@@ -196,24 +295,30 @@ def render_clause_manager():
                         key=f"edit_{i}"
                     )
                     
-                    cols = st.columns([1, 1])
+                    cols = st.columns([1, 1, 1])
                     with cols[0]:
                         if st.button("保存", key=f"save_{i}"):
-                            clause['扩展条款正文'] = edited_content
+                            db.update_clause(
+                                clause['UUID'],
+                                content=edited_content
+                            )
                             st.success("保存成功")
+                            st.rerun()
+                    
                     with cols[1]:
+                        if st.button("激活此版本", key=f"activate_{i}"):
+                            db.activate_clause_version(
+                                clause['UUID'],
+                                selected_version
+                            )
+                            st.success("版本已激活")
+                            st.rerun()
+                    
+                    with cols[2]:
                         if st.button("删除", key=f"delete_{i}"):
-                            # 获取要删除的条款的序号
-                            clause_number = clause['序号']
-                            # 从已选条款列表中移除
                             st.session_state.selected_clauses.pop(i)
-                            # 在原始数据中找到对应的索引
-                            clause_index = st.session_state.clauses_df[
-                                st.session_state.clauses_df['序号'] == clause_number
-                            ].index[0]
-                            # 从选中索引集合中移除
-                            if clause_index in st.session_state.selected_indices:
-                                st.session_state.selected_indices.remove(clause_index)
+                            if i in st.session_state.selected_indices:
+                                st.session_state.selected_indices.remove(i)
                             st.rerun()
         else:
             st.info("还未选择任何条款")
