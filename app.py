@@ -6,8 +6,6 @@ from components.project_manager import render_project_manager
 
 def init_session_state():
     """初始化session state"""
-    if 'page' not in st.session_state:
-        st.session_state.page = 'form'
     if 'insurance_data' not in st.session_state:
         st.session_state.insurance_data = None
     if 'selected_clauses' not in st.session_state:
@@ -36,41 +34,16 @@ def main():
     # 显示当前项目名称
     st.title(f"项目：{st.session_state.project_name}")
     
-    # 导航栏
-    st.markdown(
-        """
-        <style>
-        .stRadio [role=radiogroup] {
-            align-items: center;
-            justify-content: center;
-            gap: 2rem;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    # 使用选项卡展示主要功能
+    tab1, tab2, tab3 = st.tabs(["投保信息", "条款管理", "生成方案"])
     
-    page = st.radio(
-        "",
-        ["投保信息", "条款管理", "生成方案"],
-        horizontal=True,
-        key="navigation"
-    )
-    
-    st.session_state.page = {
-        "投保信息": "form",
-        "条款管理": "clauses",
-        "生成方案": "generate"
-    }[page]
-    
-    # 根据当前页面渲染不同的内容
-    if st.session_state.page == 'form':
+    with tab1:
         st.session_state.insurance_data = render_insurance_form()
     
-    elif st.session_state.page == 'clauses':
+    with tab2:
         render_clause_manager()
     
-    elif st.session_state.page == 'generate':
+    with tab3:
         if not st.session_state.insurance_data:
             st.warning("请先填写投保信息")
             return
