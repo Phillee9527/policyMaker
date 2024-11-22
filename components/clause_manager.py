@@ -309,7 +309,8 @@ def render_clause_manager():
                         versions,
                         clause['版本号'],
                         lambda version: handle_version_select(db, clause['UUID'], version),
-                        lambda version: handle_version_delete(db, clause['UUID'], version)
+                        lambda version: handle_version_delete(db, clause['UUID'], version),
+                        f"clause_{clause['UUID']}"  # 使用条款的UUID作为key前缀
                     )
                     
                     # 显示当前版本内容

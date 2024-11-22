@@ -1,6 +1,6 @@
 import streamlit as st
 
-def render_version_tags(versions, current_version, on_version_select, on_version_delete):
+def render_version_tags(versions, current_version, on_version_select, on_version_delete, key_prefix):
     """渲染版本标签"""
     st.markdown("""
     <style>
@@ -44,7 +44,8 @@ def render_version_tags(versions, current_version, on_version_select, on_version
             "选择版本",
             [v.version_number for v in versions],
             index=[v.version_number for v in versions].index(current_version),
-            format_func=lambda x: f"V{x} ({next(v.created_at.strftime('%Y-%m-%d %H:%M') for v in versions if v.version_number == x)})"
+            format_func=lambda x: f"V{x} ({next(v.created_at.strftime('%Y-%m-%d %H:%M') for v in versions if v.version_number == x)})",
+            key=f"version_select_{key_prefix}"
         )
         if selected_version != current_version:
             on_version_select(selected_version)
@@ -52,5 +53,5 @@ def render_version_tags(versions, current_version, on_version_select, on_version
     with col2:
         # 版本删除（只有当不是当前版本且不是唯一版本时才显示删除按钮）
         if len(versions) > 1 and selected_version != current_version:
-            if st.button("删除此版本", key=f"delete_version_{selected_version}"):
+            if st.button("删除此版本", key=f"delete_version_{key_prefix}_{selected_version}"):
                 on_version_delete(selected_version)
