@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from .database import Database
-from .version_manager import render_version_timeline
+from .version_manager import render_version_tags
 import io
 
 def export_clauses(clauses, format):
@@ -300,12 +300,12 @@ def render_clause_manager():
             
             # 显示已选条款
             for i, clause in enumerate(st.session_state.selected_clauses):
-                with st.expander(f"{i+1}. {clause['扩展条款标题']} (版本 {clause['版本号']})", expanded=False):
+                with st.expander(f"{i+1}. {clause['扩展条款标题']}", expanded=False):
                     # 获取条款版本历史
                     versions = db.get_clause_versions(clause['UUID'])
                     
-                    # 渲染版本时间线
-                    render_version_timeline(
+                    # 渲染版本标签
+                    render_version_tags(
                         versions,
                         clause['版本号'],
                         lambda version: handle_version_select(db, clause['UUID'], version),
