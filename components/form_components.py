@@ -8,16 +8,6 @@ def render_special_terms_editor():
     .special-terms-editor {
         min-height: 200px !important;
     }
-    .fullscreen-editor {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        z-index: 9999;
-        background: white;
-        padding: 20px;
-    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -53,26 +43,18 @@ def render_special_terms_editor():
                     "编辑内容",
                     value=term['content'],
                     height=200,
-                    key=f"term_{i}"
+                    key=f"special_term_{i}"
                 )
                 term['content'] = edited_content
                 
                 col1, col2 = st.columns([1, 4])
                 with col1:
-                    if st.button("删除", key=f"delete_{i}"):
+                    if st.button("删除", key=f"delete_special_term_{i}"):
                         st.session_state.special_terms.pop(i)
                         st.rerun()
                 with col2:
-                    if st.button("全屏编辑", key=f"fullscreen_{i}"):
-                        st.session_state[f"fullscreen_{i}"] = not st.session_state.get(f"fullscreen_{i}", False)
-                        if st.session_state[f"fullscreen_{i}"]:
-                            st.markdown("""
-                            <div class="fullscreen-editor">
-                                <div style="padding: 20px;">
-                                    <h3>全屏编辑</h3>
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
+                    if st.button("全屏编辑", key=f"fullscreen_special_term_{i}"):
+                        st.session_state[f"fullscreen_special_term_{i}"] = not st.session_state.get(f"fullscreen_special_term_{i}", False)
 
 def render_insurance_form():
     insurance_data = {}
