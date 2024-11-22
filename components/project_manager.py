@@ -2,6 +2,8 @@ import streamlit as st
 import os
 import json
 import shutil
+import zipfile
+import io
 from datetime import datetime
 from .database import Database
 
@@ -28,9 +30,10 @@ class ProjectManager:
             "created_at": datetime.now().isoformat(),
             "updated_at": datetime.now().isoformat(),
             "state": {
-                "selected_clauses": [],
-                "filters": {},
-                "search_term": ""
+                "insurance_data": None,  # 保单信息
+                "selected_clauses": [],  # 已选条款
+                "filters": {},           # 筛选条件
+                "search_term": ""        # 搜索关键词
             }
         }
         
@@ -54,11 +57,12 @@ class ProjectManager:
         # 更新session state
         st.session_state.project_name = name
         st.session_state.project_dir = project_dir
+        st.session_state.insurance_data = config['state']['insurance_data']
         st.session_state.selected_clauses = config['state']['selected_clauses']
         st.session_state.filters = config['state']['filters']
         st.session_state.search_term = config['state']['search_term']
+        st.session_state.db_path = os.path.join(project_dir, 'clauses.db')
         
-        # 返回项目数据库路径
         return os.path.join(project_dir, 'clauses.db')
     
     def save_project_state(self, name):
@@ -75,6 +79,7 @@ class ProjectManager:
         # 更新状态
         config['updated_at'] = datetime.now().isoformat()
         config['state'] = {
+            'insurance_data': st.session_state.get('insurance_data', None),
             'selected_clauses': st.session_state.get('selected_clauses', []),
             'filters': st.session_state.get('filters', {}),
             'search_term': st.session_state.get('search_term', '')
@@ -83,6 +88,43 @@ class ProjectManager:
         # 保存配置
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
+    
+    def export_project(self, name):
+        """导出项目"""
+        project_dir = os.path.join(self.base_dir, name)
+        if not os.path.exists(project_dir):
+            raise ValueError(f"项目 '{name}' 不存在")
+        
+        # 创建内存中的zip文件
+        memory_zip = io.BytesIO()
+        with zipfile.ZipFile(memory_zip, 'w', zipfile.ZIP_DEFLATED) as zf:
+            # 添加配置文件
+            config_path = os.path.join(project_dir, 'config.json')
+            zf.write(config_path, 'config.json')
+            
+            # 添加数据库文件
+            db_path = os.path.join(project_dir, 'clauses.db')
+            if os.path.exists(db_path):
+                zf.write(db_path, 'clauses.db')
+        
+        memory_zip.seek(0)
+        return memory_zip.getvalue()
+    
+    def import_project(self, name, project_data):
+        """导入项目"""
+        project_dir = os.path.join(self.base_dir, name)
+        if os.path.exists(project_dir):
+            raise ValueError(f"项目 '{name}' 已存在")
+        
+        os.makedirs(project_dir)
+        
+        # 解压项目文件
+        memory_zip = io.BytesIO(project_data)
+        with zipfile.ZipFile(memory_zip, 'r') as zf:
+            zf.extractall(project_dir)
+        
+        # 加载项目
+        return self.load_project(name)
     
     def delete_project(self, name):
         """删除项目"""
@@ -131,12 +173,24 @@ def render_project_manager():
             else:
                 st.error("请输入项目名称")
     
+    # 导入项目
+    with st.sidebar.expander("导入项目", expanded=False):
+        uploaded_file = st.file_uploader("选择项目文件", type=['zip'])
+        import_name = st.text_input("项目名称（导入）")
+        if uploaded_file is not None and import_name:
+            try:
+                project_manager.import_project(import_name, uploaded_file.read())
+                st.success(f"项目 '{import_name}' 导入成功")
+                st.rerun()
+            except ValueError as e:
+                st.error(str(e))
+    
     # 项目列表
     projects = project_manager.list_projects()
     if projects:
         st.sidebar.subheader("现有项目")
         for project in projects:
-            col1, col2 = st.sidebar.columns([3, 1])
+            col1, col2, col3 = st.sidebar.columns([2, 1, 1])
             with col1:
                 if st.button(
                     project['name'],
@@ -151,6 +205,20 @@ def render_project_manager():
                         st.error(str(e))
             
             with col2:
+                if st.button("导出", key=f"export_{project['name']}"):
+                    try:
+                        project_data = project_manager.export_project(project['name'])
+                        st.download_button(
+                            "下载项目文件",
+                            project_data,
+                            file_name=f"{project['name']}.zip",
+                            mime="application/zip",
+                            key=f"download_{project['name']}"
+                        )
+                    except ValueError as e:
+                        st.error(str(e))
+            
+            with col3:
                 if st.button("删除", key=f"delete_{project['name']}"):
                     try:
                         project_manager.delete_project(project['name'])
