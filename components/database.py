@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import json
+import io
 
 # 创建基类
 Base = declarative_base()
@@ -15,6 +15,7 @@ class Clause(Base):
     __tablename__ = 'clauses'
 
     id = Column(Integer, primary_key=True)
+    number = Column(Integer, nullable=False)  # 序号
     uuid = Column(String(50), unique=True, nullable=False)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=False)
@@ -50,8 +51,18 @@ class Database:
 
     def import_clauses(self, df):
         """导入条款数据"""
-        for _, row in df.iterrows():
+        # 确保DataFrame包含所需的列
+        required_columns = ['UUID', '扩展条款标题', '扩展条款正文', 'PINYIN', 'QUANPIN', '险种', '保险公司', '年度版本']
+        if not all(col in df.columns for col in required_columns):
+            raise ValueError("导入的数据缺少必要的列")
+
+        # 获取当前最大序号
+        max_number = self.session.query(Clause).with_entities(Clause.number).order_by(Clause.number.desc()).first()
+        start_number = (max_number[0] if max_number else 0) + 1
+
+        for i, row in df.iterrows():
             clause = Clause(
+                number=start_number + i,
                 uuid=row['UUID'],
                 title=row['扩展条款标题'],
                 content=row['扩展条款正文'],
@@ -80,13 +91,14 @@ class Database:
                 self.session.add(clause)
         self.session.commit()
 
-    def export_clauses(self, format='xlsx'):
+    def export_clauses(self, format='dataframe'):
         """导出条款数据"""
         clauses = self.session.query(Clause).filter_by(is_active=True).all()
         data = []
         for clause in clauses:
             data.append({
                 'UUID': clause.uuid,
+                '序号': clause.number,
                 '扩展条款标题': clause.title,
                 '扩展条款正文': clause.content,
                 'PINYIN': clause.pinyin,
@@ -105,6 +117,8 @@ class Database:
             return output
         elif format == 'json':
             return df.to_json(orient='records', force_ascii=False)
+        elif format == 'dataframe':
+            return df
         else:
             return df
 
@@ -120,6 +134,7 @@ class Database:
             for clause in clauses:
                 data.append({
                     'UUID': clause.uuid,
+                    '序号': clause.number,
                     '扩展条款标题': clause.title,
                     '扩展条款正文': clause.content,
                     '险种': clause.insurance_type,
