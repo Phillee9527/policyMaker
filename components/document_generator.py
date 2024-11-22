@@ -2,7 +2,8 @@ import streamlit as st
 from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement, ns
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 import io
 
 def create_element(name):
@@ -11,17 +12,15 @@ def create_element(name):
 
 def create_attribute(element, name, value):
     """创建XML属性"""
-    element.set(ns.qn(name), value)
+    element.set(qn(name), value)
 
-def add_bookmark(paragraph, bookmark_name, bookmark_text):
+def add_bookmark(paragraph, bookmark_name):
     """添加书签"""
     run = paragraph.add_run()
     tag = create_element('w:bookmarkStart')
     create_attribute(tag, 'w:id', '0')
     create_attribute(tag, 'w:name', bookmark_name)
     run._r.append(tag)
-    
-    run = paragraph.add_run(bookmark_text)
     
     tag = create_element('w:bookmarkEnd')
     create_attribute(tag, 'w:id', '0')
@@ -31,12 +30,9 @@ def add_bookmark(paragraph, bookmark_name, bookmark_text):
 
 def add_hyperlink(paragraph, text, bookmark_name):
     """添加超链接"""
-    part = paragraph.part
-    r_id = part.relate_to(bookmark_name, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=False)
-    
+    run = paragraph.add_run()
     hyperlink = create_element('w:hyperlink')
     create_attribute(hyperlink, 'w:anchor', bookmark_name)
-    create_attribute(hyperlink, 'r:id', r_id)
     
     run = create_element('w:r')
     rPr = create_element('w:rPr')
@@ -53,7 +49,6 @@ def add_hyperlink(paragraph, text, bookmark_name):
     hyperlink.append(run)
     
     paragraph._p.append(hyperlink)
-    return hyperlink
 
 def generate_markdown(insurance_data, selected_clauses):
     """生成带目录和跳转的Markdown格式保险方案"""
@@ -128,6 +123,16 @@ def generate_docx(insurance_data, selected_clauses):
     # 添加文档标题
     doc.add_heading('保险方案', 0)
     
+    # 添加扩展条款目录
+    doc.add_heading('扩展条款目录', level=1)
+    for i, clause in enumerate(selected_clauses, 1):
+        paragraph = doc.add_paragraph()
+        # 添加目录项和超链接
+        add_hyperlink(paragraph, f"{i}. {clause['扩展条款标题']}", f"clause_{i}")
+    
+    # 添加分页符
+    doc.add_page_break()
+    
     # 投保人信息
     doc.add_heading('投保人', level=1)
     doc.add_paragraph(f"名称：{insurance_data['policyholder']}")
@@ -192,12 +197,6 @@ def generate_docx(insurance_data, selected_clauses):
         for i, term in enumerate(insurance_data['special_terms'], 1):
             doc.add_paragraph(f"{i}. {term}")
     
-    # 添加扩展条款目录
-    doc.add_heading('扩展条款目录', level=1)
-    for i, clause in enumerate(selected_clauses, 1):
-        paragraph = doc.add_paragraph()
-        add_hyperlink(paragraph, f"{i}. {clause['扩展条款标题']}", f"clause_{i}")
-    
     # 添加分页符
     doc.add_page_break()
     
@@ -205,9 +204,10 @@ def generate_docx(insurance_data, selected_clauses):
     doc.add_heading('扩展条款', level=1)
     for i, clause in enumerate(selected_clauses, 1):
         # 添加条款标题（带书签）
-        heading = doc.add_paragraph()
-        add_bookmark(heading, f"clause_{i}", f"{i}. {clause['扩展条款标题']}")
-        heading.style = 'Heading 2'
+        paragraph = doc.add_paragraph()
+        add_bookmark(paragraph, f"clause_{i}")
+        paragraph.add_run(f"{i}. {clause['扩展条款标题']}")
+        paragraph.style = 'Heading 2'
         
         # 添加条款内容（移除换行符）
         content = clause['扩展条款正文'].replace('\n', ' ').strip()
