@@ -13,6 +13,10 @@ class ProjectManager:
         self.base_dir = base_dir
         if not os.path.exists(base_dir):
             os.makedirs(base_dir)
+        
+        # 初始化自动保存计时器
+        if 'last_save_time' not in st.session_state:
+            st.session_state.last_save_time = datetime.now()
     
     def create_project(self, name, description=""):
         """创建新项目"""
@@ -62,11 +66,17 @@ class ProjectManager:
         st.session_state.filters = config['state']['filters']
         st.session_state.search_term = config['state']['search_term']
         st.session_state.db_path = os.path.join(project_dir, 'clauses.db')
+        st.session_state.last_save_time = datetime.now()
         
         return os.path.join(project_dir, 'clauses.db')
     
-    def save_project_state(self, name):
+    def save_project_state(self, name, force=False):
         """保存项目状态"""
+        # 检查是否需要自动保存（每5分钟）
+        now = datetime.now()
+        if not force and (now - st.session_state.last_save_time).total_seconds() < 300:
+            return
+        
         project_dir = os.path.join(self.base_dir, name)
         if not os.path.exists(project_dir):
             raise ValueError(f"项目 '{name}' 不存在")
@@ -77,7 +87,7 @@ class ProjectManager:
             config = json.load(f)
         
         # 更新状态
-        config['updated_at'] = datetime.now().isoformat()
+        config['updated_at'] = now.isoformat()
         config['state'] = {
             'insurance_data': st.session_state.get('insurance_data', None),
             'selected_clauses': st.session_state.get('selected_clauses', []),
@@ -88,9 +98,18 @@ class ProjectManager:
         # 保存配置
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
+        
+        # 更新最后保存时间
+        st.session_state.last_save_time = now
+        
+        if force:
+            st.success("项目已保存")
     
     def export_project(self, name):
         """导出项目"""
+        # 先保存当前状态
+        self.save_project_state(name, force=True)
+        
         project_dir = os.path.join(self.base_dir, name)
         if not os.path.exists(project_dir):
             raise ValueError(f"项目 '{name}' 不存在")
@@ -190,7 +209,7 @@ def render_project_manager():
     if projects:
         st.sidebar.subheader("现有项目")
         for project in projects:
-            col1, col2, col3 = st.sidebar.columns([2, 1, 1])
+            col1, col2, col3, col4 = st.sidebar.columns([2, 1, 1, 1])
             with col1:
                 if st.button(
                     project['name'],
@@ -205,6 +224,13 @@ def render_project_manager():
                         st.error(str(e))
             
             with col2:
+                if st.button("保存", key=f"save_{project['name']}"):
+                    try:
+                        project_manager.save_project_state(project['name'], force=True)
+                    except ValueError as e:
+                        st.error(str(e))
+            
+            with col3:
                 if st.button("导出", key=f"export_{project['name']}"):
                     try:
                         project_data = project_manager.export_project(project['name'])
@@ -218,7 +244,7 @@ def render_project_manager():
                     except ValueError as e:
                         st.error(str(e))
             
-            with col3:
+            with col4:
                 if st.button("删除", key=f"delete_{project['name']}"):
                     try:
                         project_manager.delete_project(project['name'])
@@ -229,6 +255,6 @@ def render_project_manager():
     else:
         st.sidebar.info("暂无项目，请创建新项目")
     
-    # 保存当前项目状态
+    # 自动保存当前项目状态
     if 'project_name' in st.session_state:
         project_manager.save_project_state(st.session_state.project_name)
