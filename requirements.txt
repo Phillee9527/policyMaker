@@ -2,4 +2,4 @@ streamlit>=1.24.0
 pandas
 openpyxl
 python-docx
-python-markdown
+Markdown
