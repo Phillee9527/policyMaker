@@ -40,8 +40,14 @@ class ClauseVersion(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Database:
-    def __init__(self, db_path='clauses.db'):
+    def __init__(self, db_path=None):
         """初始化数据库连接"""
+        # 如果没有提供数据库路径，使用session state中的路径
+        if db_path is None and 'db_path' in st.session_state:
+            db_path = st.session_state.db_path
+        elif db_path is None:
+            db_path = 'clauses.db'
+        
         self.db_path = db_path
         self.engine = create_engine(f'sqlite:///{db_path}')
         Base.metadata.create_all(self.engine)
@@ -279,6 +285,16 @@ class Database:
         ).first()
         
         if version:
+            # 创建新版本记录（保存当前版本）
+            current_version = ClauseVersion(
+                clause_uuid=clause.uuid,
+                version_number=clause.version_number,
+                title=clause.title,
+                content=clause.content,
+                created_at=clause.updated_at
+            )
+            self.session.add(current_version)
+            
             # 更新当前条款为选中的版本
             clause.title = version.title
             clause.content = version.content
