@@ -165,7 +165,7 @@ def render_clause_manager():
                 # 更新选中的条款
                 st.session_state.selected_clauses = [
                     st.session_state.clauses_df.iloc[idx].to_dict() 
-                    for idx in st.session_state.selected_indices
+                    for idx in sorted(st.session_state.selected_indices)
                 ]
     
     # 在右侧显示已选条款列表
@@ -188,7 +188,17 @@ def render_clause_manager():
                             st.success("保存成功")
                     with cols[1]:
                         if st.button("删除", key=f"delete_{i}"):
+                            # 获取要删除的条款的序号
+                            clause_number = clause['序号']
+                            # 从已选条款列表中移除
                             st.session_state.selected_clauses.pop(i)
+                            # 在原始数据中找到对应的索引
+                            clause_index = st.session_state.clauses_df[
+                                st.session_state.clauses_df['序号'] == clause_number
+                            ].index[0]
+                            # 从选中索引集合中移除
+                            if clause_index in st.session_state.selected_indices:
+                                st.session_state.selected_indices.remove(clause_index)
                             st.rerun()
         else:
             st.info("还未选择任何条款")
