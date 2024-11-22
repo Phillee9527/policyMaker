@@ -39,8 +39,6 @@ def render_clause_manager():
     # 初始化session state
     if 'selected_clauses' not in st.session_state:
         st.session_state.selected_clauses = []
-    if 'selected_indices' not in st.session_state:
-        st.session_state.selected_indices = set()
     if 'previous_selection' not in st.session_state:
         st.session_state.previous_selection = []
     
@@ -56,7 +54,6 @@ def render_clause_manager():
             if st.button("清空数据库"):
                 db.clear_database()
                 st.session_state.selected_clauses = []
-                st.session_state.selected_indices = set()
                 st.success("数据库已清空")
                 st.rerun()
         
@@ -160,7 +157,6 @@ def render_clause_manager():
                 
                 if select_all:
                     # 全选时，将所有筛选后的条款添加到已选列表
-                    st.session_state.selected_indices = set(filtered_df.index.tolist())
                     st.session_state.selected_clauses = filtered_df.to_dict('records')
                     st.rerun()
                 
@@ -177,7 +173,7 @@ def render_clause_manager():
                     # 创建数据表格，确保选择列是布尔类型
                     selection_array = np.zeros(len(display_df), dtype=bool)
                     for i in range(len(display_df)):
-                        if display_df.index[i] in st.session_state.selected_indices:
+                        if any(c['UUID'] == display_df.iloc[i]['UUID'] for c in st.session_state.selected_clauses):
                             selection_array[i] = True
                     
                     edited_df = pd.DataFrame({
@@ -230,24 +226,27 @@ def render_clause_manager():
                 
                 # 更新选择状态
                 if not select_all:
-                    # 获取当前页面选中的行的实际索引
-                    current_page_selected = set()
+                    # 获取当前页面选中的行
+                    current_page_selected = []
                     for i, is_selected in enumerate(edited_result['选择']):
                         if is_selected:
-                            actual_idx = filtered_df.index[start_idx + i]
-                            current_page_selected.add(actual_idx)
+                            # 获取实际的条款数据
+                            clause_data = display_df.iloc[i].to_dict()
+                            if not any(c['UUID'] == clause_data['UUID'] for c in st.session_state.selected_clauses):
+                                current_page_selected.append(clause_data)
                     
-                    # 更新总的选择状态
-                    st.session_state.selected_indices = (
-                        st.session_state.selected_indices - set(filtered_df.index[start_idx:end_idx]) | 
-                        current_page_selected
-                    )
-                    
-                    # 更新选中的条款
+                    # 移除当前页面取消选择的条款
                     st.session_state.selected_clauses = [
-                        filtered_df.iloc[idx].to_dict()
-                        for idx in sorted(st.session_state.selected_indices)
+                        clause for clause in st.session_state.selected_clauses
+                        if clause['UUID'] not in [
+                            display_df.iloc[i]['UUID']
+                            for i, is_selected in enumerate(edited_result['选择'])
+                            if not is_selected
+                        ]
                     ]
+                    
+                    # 添加新选择的条款
+                    st.session_state.selected_clauses.extend(current_page_selected)
                     
                     # 检查选择状态是否发生变化
                     current_selection = [c['UUID'] for c in st.session_state.selected_clauses]
