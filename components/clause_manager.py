@@ -6,19 +6,9 @@ import io
 
 def export_clauses(clauses, format):
     """导出选中的条款"""
-    if format == 'xlsx':
-        output = io.BytesIO()
-        df = pd.DataFrame(clauses)
-        df.to_excel(output, index=False)
-        return output.getvalue()
-    elif format == 'docx':
-        db = Database()
-        clause_uuids = [clause['uuid'] for clause in clauses]
-        return db.export_selected_clauses(clause_uuids, 'docx')
-    elif format == 'markdown':
-        db = Database()
-        clause_uuids = [clause['uuid'] for clause in clauses]
-        return db.export_selected_clauses(clause_uuids, 'markdown')
+    db = Database()
+    clause_uuids = [clause['UUID'] for clause in clauses]
+    return db.export_selected_clauses(clause_uuids, format)
 
 def render_clause_manager():
     st.markdown("""
@@ -49,6 +39,8 @@ def render_clause_manager():
         with db_col1:
             if st.button("清空数据库"):
                 db.clear_database()
+                st.session_state.selected_clauses = []
+                st.session_state.selected_indices = set()
                 st.success("数据库已清空")
                 st.rerun()
         
@@ -91,7 +83,7 @@ def render_clause_manager():
             
             # 动态生成筛选框
             filters = {}
-            exclude_columns = ['UUID', 'PINYIN', 'QUANPIN', '扩展条款正文']
+            exclude_columns = ['UUID', 'PINYIN', 'QUANPIN', '扩展条款正文', '序号', '版本号']
             filter_columns = [col for col in clauses_df.columns if col not in exclude_columns]
             
             for i, col in enumerate(filter_columns):
@@ -128,110 +120,123 @@ def render_clause_manager():
                 if selected_values:
                     filtered_df = filtered_df[filtered_df[col].isin(selected_values)]
             
-            # 分页设置
-            ITEMS_PER_PAGE = 20
-            total_pages = max(1, (len(filtered_df) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
-            
-            page_cols = st.columns([1, 4])
-            with page_cols[0]:
-                current_page = st.number_input("页码", min_value=1, max_value=total_pages, value=1)
-            
-            start_idx = (current_page - 1) * ITEMS_PER_PAGE
-            end_idx = min(start_idx + ITEMS_PER_PAGE, len(filtered_df))
-            
-            # 显示分页信息
-            st.write(f"显示第 {start_idx + 1} 到 {end_idx} 条，共 {len(filtered_df)} 条")
-            
-            # 准备当前页的数据
-            display_df = filtered_df.iloc[start_idx:end_idx].copy()
-            display_df = display_df.reset_index(drop=True)
-            
-            # 全选功能
-            select_all = st.checkbox("全选当前筛选结果", key="select_all")
-            
-            if select_all:
-                # 全选时，将所有筛选后的条款添加到已选列表
-                st.session_state.selected_indices = set(filtered_df.index.tolist())
-                st.session_state.selected_clauses = filtered_df.to_dict('records')
-            
-            # 使用container和custom CSS来控制表格宽度
-            with st.container():
-                st.markdown("""
-                <style>
-                    .stDataFrame {
-                        width: 75% !important;
-                    }
-                </style>
-                """, unsafe_allow_html=True)
+            if not filtered_df.empty:
+                # 分页设置
+                ITEMS_PER_PAGE = 20
+                total_pages = max(1, (len(filtered_df) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
                 
-                # 创建数据表格
-                edited_df = pd.DataFrame({
-                    "选择": [idx in st.session_state.selected_indices for idx in filtered_df.index[start_idx:end_idx]],
-                    "序号": display_df['序号'].astype(str),
-                    "条款名称": display_df['扩展条款标题'],
-                    "条款正文": display_df['扩展条款正文'].str[:100] + '...',
-                    "版本": display_df['版本号'].astype(str)
-                })
+                page_cols = st.columns([1, 4])
+                with page_cols[0]:
+                    current_page = st.number_input("页码", min_value=1, max_value=total_pages, value=1)
                 
-                # 显示数据表格
-                edited_result = st.data_editor(
-                    edited_df,
-                    hide_index=True,
-                    use_container_width=True,
-                    column_config={
-                        "选择": st.column_config.CheckboxColumn(
-                            "选择",
-                            help="选择条款",
-                            default=False,
-                            width="small"
-                        ),
-                        "序号": st.column_config.TextColumn(
-                            "序号",
-                            help="条款序号",
-                            disabled=True,
-                            width="small"
-                        ),
-                        "条款名称": st.column_config.TextColumn(
-                            "条款名称",
-                            help="条款标题",
-                            disabled=True,
-                            width="medium"
-                        ),
-                        "条款正文": st.column_config.TextColumn(
-                            "条款正文预览",
-                            help="条款内容预览",
-                            disabled=True,
-                            width="large"
-                        ),
-                        "版本": st.column_config.TextColumn(
-                            "版本号",
-                            help="条款版本",
-                            disabled=True,
-                            width="small"
-                        )
-                    }
-                )
-            
-            # 更新选择状态
-            if not select_all:
-                # 获取当前页面选中的行
-                current_page_selected = set(
-                    filtered_df.index[start_idx + i]
-                    for i, is_selected in enumerate(edited_result['选择'])
-                    if is_selected
-                )
+                start_idx = (current_page - 1) * ITEMS_PER_PAGE
+                end_idx = min(start_idx + ITEMS_PER_PAGE, len(filtered_df))
                 
-                # 更新总的选择状态
-                st.session_state.selected_indices = (
-                    st.session_state.selected_indices - set(filtered_df.index[start_idx:end_idx]) | 
-                    current_page_selected
-                )
+                # 显示分页信息
+                st.write(f"显示第 {start_idx + 1} 到 {end_idx} 条，共 {len(filtered_df)} 条")
                 
-                # 更新选中的条款
-                st.session_state.selected_clauses = [
-                    filtered_df.iloc[idx].to_dict()
-                    for idx in sorted(st.session_state.selected_indices)
-                ]
+                # 准备当前页的数据
+                display_df = filtered_df.iloc[start_idx:end_idx].copy()
+                display_df = display_df.reset_index(drop=True)
+                
+                # 全选功能
+                select_all = st.checkbox("全选当前筛选结果", key="select_all")
+                
+                if select_all:
+                    # 全选时，将所有筛选后的条款添加到已选列表
+                    st.session_state.selected_indices = set(filtered_df.index.tolist())
+                    st.session_state.selected_clauses = filtered_df.to_dict('records')
+                
+                # 使用container和custom CSS来控制表格宽度
+                with st.container():
+                    st.markdown("""
+                    <style>
+                        .stDataFrame {
+                            width: 75% !important;
+                        }
+                    </style>
+                    """, unsafe_allow_html=True)
+                    
+                    # 创建数据表格，确保选择列是布尔类型
+                    selection_array = np.zeros(len(display_df), dtype=bool)
+                    for i in range(len(display_df)):
+                        if display_df.index[i] in st.session_state.selected_indices:
+                            selection_array[i] = True
+                    
+                    edited_df = pd.DataFrame({
+                        "选择": selection_array,
+                        "序号": display_df['序号'].astype(str),
+                        "条款名称": display_df['扩展条款标题'],
+                        "条款正文": display_df['扩展条款正文'].str[:100] + '...',
+                        "版本": display_df['版本号'].astype(str)
+                    })
+                    
+                    # 显示数据表格
+                    edited_result = st.data_editor(
+                        edited_df,
+                        hide_index=True,
+                        use_container_width=True,
+                        column_config={
+                            "选择": st.column_config.CheckboxColumn(
+                                "选择",
+                                help="选择条款",
+                                default=False,
+                                width="small"
+                            ),
+                            "序号": st.column_config.TextColumn(
+                                "序号",
+                                help="条款序号",
+                                disabled=True,
+                                width="small"
+                            ),
+                            "条款名称": st.column_config.TextColumn(
+                                "条款名称",
+                                help="条款标题",
+                                disabled=True,
+                                width="medium"
+                            ),
+                            "条款正文": st.column_config.TextColumn(
+                                "条款正文预览",
+                                help="条款内容预览",
+                                disabled=True,
+                                width="large"
+                            ),
+                            "版本": st.column_config.TextColumn(
+                                "版本号",
+                                help="条款版本",
+                                disabled=True,
+                                width="small"
+                            )
+                        }
+                    )
+                
+                # 更新选择状态
+                if not select_all:
+                    # 获取当前页面选中的行的实际索引
+                    current_page_selected = set()
+                    for i, is_selected in enumerate(edited_result['选择']):
+                        if is_selected:
+                            actual_idx = filtered_df.index[start_idx + i]
+                            current_page_selected.add(actual_idx)
+                    
+                    # 更新总的选择状态
+                    st.session_state.selected_indices = (
+                        st.session_state.selected_indices - set(filtered_df.index[start_idx:end_idx]) | 
+                        current_page_selected
+                    )
+                    
+                    # 更新选中的条款
+                    st.session_state.selected_clauses = [
+                        filtered_df.iloc[idx].to_dict()
+                        for idx in sorted(st.session_state.selected_indices)
+                    ]
+                    
+                    # 强制重新渲染
+                    st.rerun()
+            else:
+                st.info("没有找到匹配的条款")
+        else:
+            st.info("数据库中暂无条款，请先导入条款库")
     
     # 在右侧显示已选条款列表
     with col2:
