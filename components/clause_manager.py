@@ -119,33 +119,48 @@ def render_clause_manager():
                 "条款正文": display_df['扩展条款正文'].str[:100] + '...'
             })
             
-            # 显示数据表格
-            edited_result = st.data_editor(
-                edited_df,
-                hide_index=True,
-                column_config={
-                    "选择": st.column_config.CheckboxColumn(
-                        "选择",
-                        help="选择条款",
-                        default=False
-                    ),
-                    "序号": st.column_config.TextColumn(
-                        "序号",
-                        help="条款序号",
-                        disabled=True
-                    ),
-                    "条款名称": st.column_config.TextColumn(
-                        "条款名称",
-                        help="条款标题",
-                        disabled=True
-                    ),
-                    "条款正文": st.column_config.TextColumn(
-                        "条款正文预览",
-                        help="条款内容预览",
-                        disabled=True
-                    )
-                }
-            )
+            # 使用container和custom CSS来控制表格宽度
+            with st.container():
+                st.markdown("""
+                <style>
+                    .stDataFrame {
+                        width: 75% !important;
+                    }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                # 显示数据表格
+                edited_result = st.data_editor(
+                    edited_df,
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "选择": st.column_config.CheckboxColumn(
+                            "选择",
+                            help="选择条款",
+                            default=False,
+                            width="small"
+                        ),
+                        "序号": st.column_config.TextColumn(
+                            "序号",
+                            help="条款序号",
+                            disabled=True,
+                            width="small"
+                        ),
+                        "条款名称": st.column_config.TextColumn(
+                            "条款名称",
+                            help="条款标题",
+                            disabled=True,
+                            width="medium"
+                        ),
+                        "条款正文": st.column_config.TextColumn(
+                            "条款正文预览",
+                            help="条款内容预览",
+                            disabled=True,
+                            width="large"
+                        )
+                    }
+                )
             
             # 更新选择状态
             if not select_all:

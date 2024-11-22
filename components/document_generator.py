@@ -52,14 +52,6 @@ def add_hyperlink(paragraph, text, bookmark_name):
 
 def generate_markdown(insurance_data, selected_clauses):
     """生成带目录和跳转的Markdown格式保险方案"""
-    # 生成目录锚点
-    toc_links = []
-    for i, clause in enumerate(selected_clauses, 1):
-        # 创建锚点ID
-        anchor_id = f"clause-{i}"
-        # 添加目录项
-        toc_links.append(f"{i}. [{clause['扩展条款标题']}](#{anchor_id})")
-
     markdown = f"""# 保险方案
 
 # 投保人
@@ -98,12 +90,20 @@ def generate_markdown(insurance_data, selected_clauses):
         for i, term in enumerate(insurance_data['special_terms'], 1):
             markdown += f"{i}. {term}\n\n"
     
+    # 生成目录锚点
+    toc_links = []
+    for i, clause in enumerate(selected_clauses, 1):
+        # 创建锚点ID
+        anchor_id = f"clause-{i}"
+        # 添加目录项
+        toc_links.append(f"{i}. [{clause['扩展条款标题']}](#{anchor_id})")
+    
     # 添加扩展条款目录
     markdown += "\n# 扩展条款目录\n\n"
     markdown += "\n".join(toc_links)
-    markdown += "\n\n# 扩展条款\n\n"
     
     # 添加扩展条款内容（带锚点）
+    markdown += "\n\n# 扩展条款\n\n"
     for i, clause in enumerate(selected_clauses, 1):
         markdown += f"<a id='clause-{i}'></a>\n\n"
         markdown += f"## {i}. {clause['扩展条款标题']}\n\n"
@@ -122,16 +122,6 @@ def generate_docx(insurance_data, selected_clauses):
     
     # 添加文档标题
     doc.add_heading('保险方案', 0)
-    
-    # 添加扩展条款目录
-    doc.add_heading('扩展条款目录', level=1)
-    for i, clause in enumerate(selected_clauses, 1):
-        paragraph = doc.add_paragraph()
-        # 添加目录项和超链接
-        add_hyperlink(paragraph, f"{i}. {clause['扩展条款标题']}", f"clause_{i}")
-    
-    # 添加分页符
-    doc.add_page_break()
     
     # 投保人信息
     doc.add_heading('投保人', level=1)
@@ -196,6 +186,13 @@ def generate_docx(insurance_data, selected_clauses):
         doc.add_heading('特别约定', level=1)
         for i, term in enumerate(insurance_data['special_terms'], 1):
             doc.add_paragraph(f"{i}. {term}")
+    
+    # 添加扩展条款目录
+    doc.add_heading('扩展条款目录', level=1)
+    for i, clause in enumerate(selected_clauses, 1):
+        paragraph = doc.add_paragraph()
+        # 添加目录项和超链接
+        add_hyperlink(paragraph, f"{i}. {clause['扩展条款标题']}", f"clause_{i}")
     
     # 添加分页符
     doc.add_page_break()
