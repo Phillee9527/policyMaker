@@ -264,59 +264,65 @@ def render_project_manager():
             data.append({
                 "项目名称": project['name'],
                 "描述": project['description'],
-                "最后更新": datetime.fromisoformat(project['updated_at']).strftime('%Y-%m-%d %H:%M'),
-                "操作": "选择"
+                "最后更新": datetime.fromisoformat(project['updated_at']).strftime('%Y-%m-%d %H:%M')
             })
         
         # 显示项目表格
+        df = pd.DataFrame(data)
         edited_df = st.sidebar.data_editor(
-            pd.DataFrame(data),
+            df,
             hide_index=True,
             use_container_width=True,
             column_config={
-                "项目名称": st.column_config.TextColumn(
+                "项目名称": st.column_config.Column(
                     "项目名称",
-                    width="medium"
+                    width="medium",
+                    help="点击项目名称加载项目"
                 ),
-                "描述": st.column_config.TextColumn(
+                "描述": st.column_config.Column(
                     "描述",
                     width="medium"
                 ),
-                "最后更新": st.column_config.TextColumn(
+                "最后更新": st.column_config.Column(
                     "最后更新",
                     width="small"
-                ),
-                "操作": st.column_config.SelectboxColumn(
-                    "操作",
-                    help="选择操作",
-                    width="small",
-                    options=["选择", "保存", "导出", "删除"]
                 )
             }
         )
         
-        # 处理表格操作
+        # 处理项目选择
         if edited_df is not None and len(edited_df) > 0:
             for idx, row in edited_df.iterrows():
                 project_name = row["项目名称"]
-                action = row["操作"]
                 
-                if action != "选择":
-                    handle_project_action(action.lower(), project_name, project_manager)
-                    # 重置操作
-                    edited_df.at[idx, "操作"] = "选择"
-                    st.rerun()
+                # 创建一个容器来包含操作按钮
+                container = st.sidebar.container()
+                col1, col2, col3 = container.columns(3)
                 
-                # 如果是当前项目，高亮显示
-                if project_name == st.session_state.get('project_name'):
-                    edited_df.at[idx, "项目名称"] = f"**{project_name}**"
+                # 保存按钮
+                with col1:
+                    if st.button("保存", key=f"save_{project_name}"):
+                        handle_project_action('save', project_name, project_manager)
+                
+                # 导出按钮
+                with col2:
+                    if st.button("导出", key=f"export_{project_name}"):
+                        handle_project_action('export', project_name, project_manager)
+                
+                # 删除按钮
+                with col3:
+                    if st.button("删除", key=f"delete_{project_name}"):
+                        handle_project_action('delete', project_name, project_manager)
+                
+                # 添加分隔线
+                st.sidebar.markdown("---")
         
         # 显示当前项目信息
         if 'project_name' in st.session_state:
-            st.sidebar.markdown("---")
-            st.sidebar.markdown(f"**当前项目：** {st.session_state.project_name}")
             current_project = next((p for p in projects if p['name'] == st.session_state.project_name), None)
             if current_project:
+                st.sidebar.markdown("### 当前项目")
+                st.sidebar.markdown(f"**名称：** {current_project['name']}")
                 st.sidebar.markdown(f"**描述：** {current_project['description']}")
                 st.sidebar.markdown(f"**最后更新：** {datetime.fromisoformat(current_project['updated_at']).strftime('%Y-%m-%d %H:%M')}")
     else:
