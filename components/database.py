@@ -49,6 +49,22 @@ class Database:
         elif db_path is None:
             db_path = 'clauses.db'
         
+        # 确保数据库目录存在
+        db_dir = os.path.dirname(os.path.abspath(db_path))
+        if not os.path.exists(db_dir):
+            os.makedirs(db_dir)
+        
+        # 确保数据库文件所在目录有写权限
+        try:
+            # 尝试创建一个临时文件来测试写权限
+            test_file = os.path.join(db_dir, '.test')
+            with open(test_file, 'w') as f:
+                f.write('test')
+            os.remove(test_file)
+        except Exception as e:
+            st.error(f"数据库目录没有写权限: {str(e)}")
+            raise
+        
         self.db_path = db_path
         self.engine = create_engine(f'sqlite:///{db_path}')
         Base.metadata.create_all(self.engine)
