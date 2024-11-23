@@ -18,6 +18,10 @@ class ProjectManager:
         # 初始化自动保存计时器
         if 'last_save_time' not in st.session_state:
             st.session_state.last_save_time = datetime.now()
+        
+        # 初始化按钮状态
+        if 'button_clicked' not in st.session_state:
+            st.session_state.button_clicked = None
     
     def create_project(self, name, description=""):
         """创建新项目"""
@@ -238,47 +242,56 @@ def render_project_manager():
                     key=f"load_{project['name']}_{timestamp}_{unique_id}",
                     help=f"最后更新: {datetime.fromisoformat(project['updated_at']).strftime('%Y-%m-%d %H:%M')}\n\n{project['description']}"
                 ):
-                    try:
-                        db_path = project_manager.load_project(project['name'])
-                        st.session_state.db_path = db_path
-                        st.rerun()
-                    except ValueError as e:
-                        st.error(str(e))
+                    st.session_state.button_clicked = ('load', project['name'])
+                    st.rerun()
             
             # 保存按钮
             with col2:
                 if st.button("保存", key=f"save_{project['name']}_{timestamp}_{unique_id}"):
-                    try:
-                        project_manager.save_project_state(project['name'], force=True)
-                    except ValueError as e:
-                        st.error(str(e))
+                    st.session_state.button_clicked = ('save', project['name'])
+                    st.rerun()
             
             # 导出按钮
             with col3:
                 if st.button("导出", key=f"export_{project['name']}_{timestamp}_{unique_id}"):
-                    try:
-                        project_data = project_manager.export_project(project['name'])
-                        st.download_button(
-                            "下载项目文件",
-                            project_data,
-                            file_name=f"{project['name']}.zip",
-                            mime="application/zip",
-                            key=f"download_{project['name']}_{timestamp}_{unique_id}"
-                        )
-                    except ValueError as e:
-                        st.error(str(e))
+                    st.session_state.button_clicked = ('export', project['name'])
+                    st.rerun()
             
             # 删除按钮
             with col4:
                 if st.button("删除", key=f"delete_{project['name']}_{timestamp}_{unique_id}"):
-                    try:
-                        project_manager.delete_project(project['name'])
-                        st.success(f"项目 '{project['name']}' 已删除")
-                        st.rerun()
-                    except ValueError as e:
-                        st.error(str(e))
+                    st.session_state.button_clicked = ('delete', project['name'])
+                    st.rerun()
     else:
         st.sidebar.info("暂无项目，请创建新项目")
+    
+    # 处理按钮点击事件
+    if st.session_state.button_clicked:
+        action, name = st.session_state.button_clicked
+        st.session_state.button_clicked = None  # 清除按钮状态
+        
+        try:
+            if action == 'load':
+                db_path = project_manager.load_project(name)
+                st.session_state.db_path = db_path
+                st.rerun()
+            elif action == 'save':
+                project_manager.save_project_state(name, force=True)
+            elif action == 'export':
+                project_data = project_manager.export_project(name)
+                st.sidebar.download_button(
+                    "下载项目文件",
+                    project_data,
+                    file_name=f"{name}.zip",
+                    mime="application/zip",
+                    key=f"download_{name}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                )
+            elif action == 'delete':
+                project_manager.delete_project(name)
+                st.success(f"项目 '{name}' 已删除")
+                st.rerun()
+        except ValueError as e:
+            st.error(str(e))
     
     # 自动保存当前项目状态
     if 'project_name' in st.session_state:

@@ -13,6 +13,10 @@ def init_session_state():
         st.session_state.selected_clauses = []
     if 'db_path' not in st.session_state:
         st.session_state.db_path = 'clauses.db'
+    if 'project_name' not in st.session_state:
+        st.session_state.project_name = None
+    if 'project_dir' not in st.session_state:
+        st.session_state.project_dir = None
 
 def main():
     st.set_page_config(
@@ -32,7 +36,7 @@ def main():
     render_project_manager()
     
     # 如果没有选择项目，显示提示信息
-    if 'project_name' not in st.session_state:
+    if not st.session_state.project_name:
         st.warning("请先选择或创建一个项目")
         return
     
