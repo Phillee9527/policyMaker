@@ -6,7 +6,52 @@ import zipfile
 import io
 from datetime import datetime
 import uuid
+import pandas as pd
 from .database import Database
+
+def handle_project_action(action, project_name, project_manager):
+    """处理项目操作"""
+    try:
+        if action == 'load':
+            db_path = project_manager.load_project(project_name)
+            st.session_state.db_path = db_path
+            st.rerun()
+        
+        elif action == 'save':
+            # 让用户选择保存位置
+            project_data = project_manager.save_project(project_name)
+            st.download_button(
+                "点击下载项目文件",
+                project_data,
+                file_name=f"{project_name}.zip",
+                mime="application/zip",
+                key=f"save_{project_name}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            )
+            st.success("项目已保存")
+        
+        elif action == 'export':
+            # 导出项目到用户选择的位置
+            project_data = project_manager.export_project(project_name)
+            st.download_button(
+                "点击下载项目文件",
+                project_data,
+                file_name=f"{project_name}.zip",
+                mime="application/zip",
+                key=f"export_{project_name}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            )
+        
+        elif action == 'delete':
+            if st.session_state.get('confirm_delete') == project_name:
+                project_manager.delete_project(project_name)
+                st.session_state.pop('confirm_delete', None)
+                st.success("项目已删除")
+                st.rerun()
+            else:
+                st.session_state.confirm_delete = project_name
+                st.warning("确定要删除当前项目吗？再次点击删除按钮确认。")
+    
+    except Exception as e:
+        st.error(str(e))
 
 class ProjectManager:
     def __init__(self, base_dir='projects'):
@@ -18,10 +63,6 @@ class ProjectManager:
         # 初始化自动保存计时器
         if 'last_save_time' not in st.session_state:
             st.session_state.last_save_time = datetime.now()
-        
-        # 初始化按钮状态
-        if 'button_clicked' not in st.session_state:
-            st.session_state.button_clicked = None
     
     def create_project(self, name, description=""):
         """创建新项目"""
@@ -77,13 +118,8 @@ class ProjectManager:
         
         return os.path.join(project_dir, 'clauses.db')
     
-    def save_project_state(self, name, force=False):
-        """保存项目状态"""
-        # 检查是否需要自动保存（每5分钟）
-        now = datetime.now()
-        if not force and (now - st.session_state.last_save_time).total_seconds() < 300:
-            return
-        
+    def save_project(self, name):
+        """保存项目"""
         project_dir = os.path.join(self.base_dir, name)
         if not os.path.exists(project_dir):
             raise ValueError(f"项目 '{name}' 不存在")
@@ -94,7 +130,7 @@ class ProjectManager:
             config = json.load(f)
         
         # 更新状态
-        config['updated_at'] = now.isoformat()
+        config['updated_at'] = datetime.now().isoformat()
         config['state'] = {
             'insurance_data': st.session_state.get('insurance_data', None),
             'selected_clauses': st.session_state.get('selected_clauses', []),
@@ -106,18 +142,13 @@ class ProjectManager:
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
         
-        # 更新最后保存时间
-        st.session_state.last_save_time = now
+        # 创建项目文件
+        project_data = self.export_project(name)
         
-        if force:
-            st.success("项目已保存")
-            st.rerun()
+        return project_data
     
     def export_project(self, name):
         """导出项目"""
-        # 先保存当前状态
-        self.save_project_state(name, force=True)
-        
         project_dir = os.path.join(self.base_dir, name)
         if not os.path.exists(project_dir):
             raise ValueError(f"项目 '{name}' 不存在")
@@ -225,74 +256,68 @@ def render_project_manager():
     # 项目列表
     projects = project_manager.list_projects()
     if projects:
-        st.sidebar.subheader("现有项目")
+        st.sidebar.subheader("项目列表")
+        
+        # 创建项目数据表格
+        data = []
         for project in projects:
-            # 生成唯一的key
-            unique_id = str(uuid.uuid4())
-            timestamp = datetime.fromisoformat(project['updated_at']).strftime('%Y%m%d%H%M%S')
-            
-            # 创建一个容器来包含所有按钮
-            container = st.sidebar.container()
-            col1, col2, col3, col4 = container.columns([2, 1, 1, 1])
-            
-            # 项目名称按钮
-            with col1:
-                if st.button(
-                    project['name'],
-                    key=f"load_{project['name']}_{timestamp}_{unique_id}",
-                    help=f"最后更新: {datetime.fromisoformat(project['updated_at']).strftime('%Y-%m-%d %H:%M')}\n\n{project['description']}"
-                ):
-                    st.session_state.button_clicked = ('load', project['name'])
+            data.append({
+                "项目名称": project['name'],
+                "描述": project['description'],
+                "最后更新": datetime.fromisoformat(project['updated_at']).strftime('%Y-%m-%d %H:%M'),
+                "操作": "选择"
+            })
+        
+        # 显示项目表格
+        edited_df = st.sidebar.data_editor(
+            pd.DataFrame(data),
+            hide_index=True,
+            use_container_width=True,
+            column_config={
+                "项目名称": st.column_config.TextColumn(
+                    "项目名称",
+                    width="medium"
+                ),
+                "描述": st.column_config.TextColumn(
+                    "描述",
+                    width="medium"
+                ),
+                "最后更新": st.column_config.TextColumn(
+                    "最后更新",
+                    width="small"
+                ),
+                "操作": st.column_config.SelectboxColumn(
+                    "操作",
+                    help="选择操作",
+                    width="small",
+                    options=["选择", "保存", "导出", "删除"]
+                )
+            }
+        )
+        
+        # 处理表格操作
+        if edited_df is not None and len(edited_df) > 0:
+            for idx, row in edited_df.iterrows():
+                project_name = row["项目名称"]
+                action = row["操作"]
+                
+                if action != "选择":
+                    handle_project_action(action.lower(), project_name, project_manager)
+                    # 重置操作
+                    edited_df.at[idx, "操作"] = "选择"
                     st.rerun()
-            
-            # 保存按钮
-            with col2:
-                if st.button("保存", key=f"save_{project['name']}_{timestamp}_{unique_id}"):
-                    st.session_state.button_clicked = ('save', project['name'])
-                    st.rerun()
-            
-            # 导出按钮
-            with col3:
-                if st.button("导出", key=f"export_{project['name']}_{timestamp}_{unique_id}"):
-                    st.session_state.button_clicked = ('export', project['name'])
-                    st.rerun()
-            
-            # 删除按钮
-            with col4:
-                if st.button("删除", key=f"delete_{project['name']}_{timestamp}_{unique_id}"):
-                    st.session_state.button_clicked = ('delete', project['name'])
-                    st.rerun()
+                
+                # 如果是当前项目，高亮显示
+                if project_name == st.session_state.get('project_name'):
+                    edited_df.at[idx, "项目名称"] = f"**{project_name}**"
+        
+        # 显示当前项目信息
+        if 'project_name' in st.session_state:
+            st.sidebar.markdown("---")
+            st.sidebar.markdown(f"**当前项目：** {st.session_state.project_name}")
+            current_project = next((p for p in projects if p['name'] == st.session_state.project_name), None)
+            if current_project:
+                st.sidebar.markdown(f"**描述：** {current_project['description']}")
+                st.sidebar.markdown(f"**最后更新：** {datetime.fromisoformat(current_project['updated_at']).strftime('%Y-%m-%d %H:%M')}")
     else:
         st.sidebar.info("暂无项目，请创建新项目")
-    
-    # 处理按钮点击事件
-    if st.session_state.button_clicked:
-        action, name = st.session_state.button_clicked
-        st.session_state.button_clicked = None  # 清除按钮状态
-        
-        try:
-            if action == 'load':
-                db_path = project_manager.load_project(name)
-                st.session_state.db_path = db_path
-                st.rerun()
-            elif action == 'save':
-                project_manager.save_project_state(name, force=True)
-            elif action == 'export':
-                project_data = project_manager.export_project(name)
-                st.sidebar.download_button(
-                    "下载项目文件",
-                    project_data,
-                    file_name=f"{name}.zip",
-                    mime="application/zip",
-                    key=f"download_{name}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                )
-            elif action == 'delete':
-                project_manager.delete_project(name)
-                st.success(f"项目 '{name}' 已删除")
-                st.rerun()
-        except ValueError as e:
-            st.error(str(e))
-    
-    # 自动保存当前项目状态
-    if 'project_name' in st.session_state:
-        project_manager.save_project_state(st.session_state.project_name)
