@@ -14,20 +14,7 @@ def export_clauses(clauses, format):
 def handle_version_select(db, clause_uuid, version):
     """处理版本选择"""
     if db.activate_clause_version(clause_uuid, version):
-        # 获取更新后的条款内容
-        clause = db.session.query(db.Clause).filter_by(uuid=clause_uuid).first()
-        if clause:
-            # 更新session state中的条款内容
-            st.session_state.selected_clauses = [
-                {
-                    **c,
-                    '扩展条款正文': clause.content,
-                    '版本号': clause.version_number,
-                    '扩展条款标题': clause.title
-                } if c['UUID'] == clause_uuid else c
-                for c in st.session_state.selected_clauses
-            ]
-            st.rerun()
+        st.rerun()
 
 def handle_version_delete(db, clause_uuid, version):
     """处理版本删除"""
@@ -40,7 +27,7 @@ def handle_version_delete(db, clause_uuid, version):
 def handle_content_save(db, clause_uuid, content):
     """处理内容保存"""
     if db.update_clause(clause_uuid, content=content):
-        st.success("保存成功")
+        st.success("已保存为新版本")
         st.rerun()
     else:
         st.error("保存失败")

@@ -56,7 +56,7 @@ def render_version_tags(versions, current_version, on_version_select, on_version
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("保存", key=f"save_{key_prefix}"):
+            if st.button("保存为新版本", key=f"save_{key_prefix}"):
                 st.session_state[f"editing_{key_prefix}"] = False
                 return edited_content, True
         with col2:

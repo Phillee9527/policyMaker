@@ -205,7 +205,7 @@ class Database:
                     # 创建新版本记录
                     version = ClauseVersion(
                         clause_uuid=existing_clause.uuid,
-                        version_number=existing_clause.version_number,  # 保存当前版本
+                        version_number=existing_clause.version_number + 1,  # 新版本号
                         title=existing_clause.title,
                         content=existing_clause.content,
                         created_at=existing_clause.updated_at
@@ -220,7 +220,7 @@ class Database:
                     existing_clause.insurance_type = row['险种']
                     existing_clause.company = row['保险公司']
                     existing_clause.version = row['年度版本']
-                    existing_clause.version_number += 1
+                    existing_clause.version_number = version.version_number
                     existing_clause.updated_at = datetime.utcnow()
                     update_count += 1
             else:
@@ -327,15 +327,15 @@ class Database:
         """更新条款内容"""
         clause = self.session.query(Clause).filter_by(uuid=uuid).first()
         if clause:
-            # 只有当内容有变化时才创建新版本
-            if content and content != clause.content:
-                # 创建新版本记录（保存当前版本）
+            # 每次保存都创建新版本
+            if content:
+                # 创建新版本记录
                 version = ClauseVersion(
                     clause_uuid=clause.uuid,
-                    version_number=clause.version_number,
-                    title=clause.title,
-                    content=clause.content,
-                    created_at=clause.updated_at
+                    version_number=clause.version_number + 1,  # 新版本号
+                    title=title if title else clause.title,
+                    content=content,
+                    created_at=datetime.utcnow()
                 )
                 self.session.add(version)
                 
@@ -343,16 +343,17 @@ class Database:
                 if title:
                     clause.title = title
                 clause.content = content
-                clause.version_number += 1
-                clause.updated_at = datetime.utcnow()
+                clause.version_number = version.version_number
+                clause.updated_at = version.created_at
                 self.session.commit()
                 
                 # 强制重新加载条款内容
                 st.session_state.selected_clauses = [
                     {
                         **c,
-                        'content': content,
-                        'version_number': clause.version_number
+                        '扩展条款正文': content,
+                        '版本号': version.version_number,
+                        '扩展条款标题': title if title else c['扩展条款标题']
                     } if c['UUID'] == uuid else c
                     for c in st.session_state.selected_clauses
                 ]
@@ -411,8 +412,9 @@ class Database:
             st.session_state.selected_clauses = [
                 {
                     **c,
-                    'content': version.content,
-                    'version_number': version.version_number
+                    '扩展条款正文': version.content,
+                    '版本号': version.version_number,
+                    '扩展条款标题': version.title
                 } if c['UUID'] == uuid else c
                 for c in st.session_state.selected_clauses
             ]
