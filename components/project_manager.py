@@ -5,6 +5,7 @@ import shutil
 import zipfile
 import io
 from datetime import datetime
+import uuid
 from .database import Database
 
 class ProjectManager:
@@ -46,7 +47,9 @@ class ProjectManager:
         
         # 创建项目数据库
         db = Database(os.path.join(project_dir, 'clauses.db'))
-        return project_dir
+        
+        # 自动加载新创建的项目
+        return self.load_project(name)
     
     def load_project(self, name):
         """加载项目"""
@@ -104,6 +107,7 @@ class ProjectManager:
         
         if force:
             st.success("项目已保存")
+            st.rerun()
     
     def export_project(self, name):
         """导出项目"""
@@ -152,6 +156,16 @@ class ProjectManager:
             raise ValueError(f"项目 '{name}' 不存在")
         
         shutil.rmtree(project_dir)
+        
+        # 如果删除的是当前项目，清除session state
+        if st.session_state.get('project_name') == name:
+            st.session_state.pop('project_name', None)
+            st.session_state.pop('project_dir', None)
+            st.session_state.pop('db_path', None)
+            st.session_state.pop('insurance_data', None)
+            st.session_state.pop('selected_clauses', None)
+            st.session_state.pop('filters', None)
+            st.session_state.pop('search_term', None)
     
     def list_projects(self):
         """列出所有项目"""
@@ -209,11 +223,19 @@ def render_project_manager():
     if projects:
         st.sidebar.subheader("现有项目")
         for project in projects:
-            col1, col2, col3, col4 = st.sidebar.columns([2, 1, 1, 1])
+            # 生成唯一的key
+            unique_id = str(uuid.uuid4())
+            timestamp = datetime.fromisoformat(project['updated_at']).strftime('%Y%m%d%H%M%S')
+            
+            # 创建一个容器来包含所有按钮
+            container = st.sidebar.container()
+            col1, col2, col3, col4 = container.columns([2, 1, 1, 1])
+            
+            # 项目名称按钮
             with col1:
                 if st.button(
                     project['name'],
-                    key=f"load_{project['name']}",
+                    key=f"load_{project['name']}_{timestamp}_{unique_id}",
                     help=f"最后更新: {datetime.fromisoformat(project['updated_at']).strftime('%Y-%m-%d %H:%M')}\n\n{project['description']}"
                 ):
                     try:
@@ -223,15 +245,17 @@ def render_project_manager():
                     except ValueError as e:
                         st.error(str(e))
             
+            # 保存按钮
             with col2:
-                if st.button("保存", key=f"save_{project['name']}"):
+                if st.button("保存", key=f"save_{project['name']}_{timestamp}_{unique_id}"):
                     try:
                         project_manager.save_project_state(project['name'], force=True)
                     except ValueError as e:
                         st.error(str(e))
             
+            # 导出按钮
             with col3:
-                if st.button("导出", key=f"export_{project['name']}"):
+                if st.button("导出", key=f"export_{project['name']}_{timestamp}_{unique_id}"):
                     try:
                         project_data = project_manager.export_project(project['name'])
                         st.download_button(
@@ -239,13 +263,14 @@ def render_project_manager():
                             project_data,
                             file_name=f"{project['name']}.zip",
                             mime="application/zip",
-                            key=f"download_{project['name']}"
+                            key=f"download_{project['name']}_{timestamp}_{unique_id}"
                         )
                     except ValueError as e:
                         st.error(str(e))
             
+            # 删除按钮
             with col4:
-                if st.button("删除", key=f"delete_{project['name']}"):
+                if st.button("删除", key=f"delete_{project['name']}_{timestamp}_{unique_id}"):
                     try:
                         project_manager.delete_project(project['name'])
                         st.success(f"项目 '{project['name']}' 已删除")
