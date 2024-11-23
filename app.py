@@ -58,7 +58,7 @@ def main():
         format = st.selectbox(
             "选择格式",
             ["Markdown", "Word"],
-            key="export_format"
+            key="generate_format"  # 修改key以避免重复
         )
         
         if st.button("生成方案"):

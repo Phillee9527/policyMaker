@@ -206,10 +206,10 @@ class Database:
         if clause:
             # 只有当内容有变化时才创建新版本
             if content and content != clause.content:
-                # 创建新版本记录
+                # 创建新版本记录（保存当前版本）
                 version = ClauseVersion(
                     clause_uuid=clause.uuid,
-                    version_number=clause.version_number,  # 保存当前版本
+                    version_number=clause.version_number,
                     title=clause.title,
                     content=clause.content,
                     created_at=clause.updated_at
@@ -223,6 +223,17 @@ class Database:
                 clause.version_number += 1
                 clause.updated_at = datetime.utcnow()
                 self.session.commit()
+                
+                # 强制重新加载条款内容
+                st.session_state.selected_clauses = [
+                    {
+                        **c,
+                        'content': content,
+                        'version_number': clause.version_number
+                    } if c['UUID'] == uuid else c
+                    for c in st.session_state.selected_clauses
+                ]
+                
                 return True
         return False
 
@@ -230,6 +241,8 @@ class Database:
         """获取条款的所有版本"""
         # 获取当前版本
         current = self.session.query(Clause).filter_by(uuid=uuid).first()
+        if not current:
+            return []
         
         # 获取历史版本
         versions = self.session.query(ClauseVersion).filter_by(
@@ -248,6 +261,41 @@ class Database:
         # 合并并按版本号排序
         all_versions = [current_version] + versions
         return sorted(all_versions, key=lambda x: x.version_number, reverse=True)
+
+    def activate_clause_version(self, uuid, version_number):
+        """激活指定版本的条款"""
+        # 如果要激活的版本就是当前版本，不做任何操作
+        clause = self.session.query(Clause).filter_by(uuid=uuid).first()
+        if not clause or clause.version_number == version_number:
+            return True
+            
+        # 获取要激活的版本
+        version = self.session.query(ClauseVersion).filter_by(
+            clause_uuid=uuid,
+            version_number=version_number
+        ).first()
+        
+        if version:
+            # 更新当前条款为选中的版本
+            clause.title = version.title
+            clause.content = version.content
+            clause.version_number = version.version_number
+            clause.updated_at = version.created_at
+            
+            self.session.commit()
+            
+            # 强制重新加载条款内容
+            st.session_state.selected_clauses = [
+                {
+                    **c,
+                    'content': version.content,
+                    'version_number': version.version_number
+                } if c['UUID'] == uuid else c
+                for c in st.session_state.selected_clauses
+            ]
+            
+            return True
+        return False
 
     def delete_clause_version(self, uuid, version_number):
         """删除指定版本的条款"""
@@ -271,40 +319,6 @@ class Database:
         
         self.session.commit()
         return True
-
-    def activate_clause_version(self, uuid, version_number):
-        """激活指定版本的条款"""
-        # 如果要激活的版本就是当前版本，不做任何操作
-        clause = self.session.query(Clause).filter_by(uuid=uuid).first()
-        if clause.version_number == version_number:
-            return True
-            
-        # 获取要激活的版本
-        version = self.session.query(ClauseVersion).filter_by(
-            clause_uuid=uuid,
-            version_number=version_number
-        ).first()
-        
-        if version:
-            # 创建新版本记录（保存当前版本）
-            current_version = ClauseVersion(
-                clause_uuid=clause.uuid,
-                version_number=clause.version_number,
-                title=clause.title,
-                content=clause.content,
-                created_at=clause.updated_at
-            )
-            self.session.add(current_version)
-            
-            # 更新当前条款为选中的版本
-            clause.title = version.title
-            clause.content = version.content
-            clause.version_number = version.version_number
-            clause.updated_at = version.created_at
-            
-            self.session.commit()
-            return True
-        return False
 
     def clear_database(self):
         """清空数据库"""
