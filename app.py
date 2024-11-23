@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 from components.form_components import render_insurance_form
 from components.clause_manager import render_clause_manager
 from components.document_generator import generate_document
@@ -22,6 +23,10 @@ def main():
     
     # 初始化session state
     init_session_state()
+    
+    # 确保项目目录存在
+    if not os.path.exists('projects'):
+        os.makedirs('projects')
     
     # 渲染项目管理器
     render_project_manager()
@@ -58,7 +63,7 @@ def main():
         format = st.selectbox(
             "选择格式",
             ["Markdown", "Word"],
-            key="generate_format"  # 修改key以避免重复
+            key="generate_format"
         )
         
         if st.button("生成方案"):
