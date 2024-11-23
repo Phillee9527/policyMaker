@@ -164,104 +164,105 @@ def render_clause_manager():
                 # 全选功能
                 select_all = st.checkbox("全选当前筛选结果", key="select_all")
                 
+                # 如果全选被勾选，更新选择状态
                 if select_all:
-                    # 全选时，将所有筛选后的条款添加到已选列表
+                    # 直接将所有筛选后的条款添加到selected_clauses
                     st.session_state.selected_clauses = filtered_df.to_dict('records')
-                    st.rerun()
-                
-                # 使用container和custom CSS来控制表格宽度
-                with st.container():
-                    st.markdown("""
-                    <style>
-                        .stDataFrame {
-                            width: 75% !important;
-                        }
-                    </style>
-                    """, unsafe_allow_html=True)
-                    
-                    # 创建数据表格，确保选择列是布尔类型
+                    selection_array = np.ones(len(display_df), dtype=bool)
+                else:
                     selection_array = np.zeros(len(display_df), dtype=bool)
+                    # 检查当前行是否已被选中
                     for i in range(len(display_df)):
                         if any(c['UUID'] == display_df.iloc[i]['UUID'] for c in st.session_state.selected_clauses):
                             selection_array[i] = True
-                    
-                    edited_df = pd.DataFrame({
-                        "选择": selection_array,
-                        "序号": display_df['序号'].astype(str),
-                        "条款名称": display_df['扩展条款标题'],
-                        "条款正文": display_df['扩展条款正文'].str[:100] + '...',
-                        "版本": display_df['版本号'].astype(str)
-                    })
-                    
-                    # 显示数据表格
-                    edited_result = st.data_editor(
-                        edited_df,
-                        hide_index=True,
-                        use_container_width=True,
-                        key=f"data_editor_{current_page}",
-                        column_config={
-                            "选择": st.column_config.CheckboxColumn(
-                                "选择",
-                                help="选择条款",
-                                default=False,
-                                width="small"
-                            ),
-                            "序号": st.column_config.TextColumn(
-                                "序号",
-                                help="条款序号",
-                                disabled=True,
-                                width="small"
-                            ),
-                            "条款名称": st.column_config.TextColumn(
-                                "条款名称",
-                                help="条款标题",
-                                disabled=True,
-                                width="medium"
-                            ),
-                            "条款正文": st.column_config.TextColumn(
-                                "条款正文预览",
-                                help="条款内容预览",
-                                disabled=True,
-                                width="large"
-                            ),
-                            "版本": st.column_config.TextColumn(
-                                "版本号",
-                                help="条款版本",
-                                disabled=True,
-                                width="small"
-                            )
-                        }
-                    )
                 
-                # 更新选择状态
+                edited_df = pd.DataFrame({
+                    "选择": selection_array,
+                    "序号": display_df['序号'].astype(str),
+                    "条款名称": display_df['扩展条款标题'],
+                    "条款正文": display_df['扩展条款正文'].str[:100] + '...',
+                    "版本": display_df['版本号'].astype(str)
+                })
+                
+                # 显示数据表格
+                edited_result = st.data_editor(
+                    edited_df,
+                    hide_index=True,
+                    use_container_width=True,
+                    key=f"data_editor_{current_page}",
+                    column_config={
+                        "选择": st.column_config.CheckboxColumn(
+                            "选择",
+                            help="选择条款",
+                            default=False,
+                            width="small"
+                        ),
+                        "序号": st.column_config.TextColumn(
+                            "序号",
+                            help="条款序号",
+                            disabled=True,
+                            width="small"
+                        ),
+                        "条款名称": st.column_config.TextColumn(
+                            "条款名称",
+                            help="条款标题",
+                            disabled=True,
+                            width="medium"
+                        ),
+                        "条款正文": st.column_config.TextColumn(
+                            "条款正文预览",
+                            help="条款内容预览",
+                            disabled=True,
+                            width="large"
+                        ),
+                        "版本": st.column_config.TextColumn(
+                            "版本号",
+                            help="条款版本",
+                            disabled=True,
+                            width="small"
+                        )
+                    }
+                )
+                
+                # 处理单个选择
                 if not select_all:
                     # 获取当前页面选中的行
                     current_page_selected = []
+                    selection_changed = False
+                    
                     for i, is_selected in enumerate(edited_result['选择']):
-                        if is_selected:
-                            # 获取实际的条款数据
-                            clause_data = display_df.iloc[i].to_dict()
-                            if not any(c['UUID'] == clause_data['UUID'] for c in st.session_state.selected_clauses):
-                                current_page_selected.append(clause_data)
+                        clause_data = display_df.iloc[i].to_dict()
+                        current_selected = any(c['UUID'] == clause_data['UUID'] for c in st.session_state.selected_clauses)
+                        
+                        if is_selected and not current_selected:
+                            current_page_selected.append(clause_data)
+                            selection_changed = True
+                        elif not is_selected and current_selected:
+                            selection_changed = True
                     
-                    # 移除当前页面取消选择的条款
-                    st.session_state.selected_clauses = [
-                        clause for clause in st.session_state.selected_clauses
-                        if clause['UUID'] not in [
-                            display_df.iloc[i]['UUID']
-                            for i, is_selected in enumerate(edited_result['选择'])
-                            if not is_selected
+                    if selection_changed:
+                        # 移除当前页面取消选择的条款
+                        st.session_state.selected_clauses = [
+                            clause for clause in st.session_state.selected_clauses
+                            if clause['UUID'] not in [
+                                display_df.iloc[i]['UUID']
+                                for i, is_selected in enumerate(edited_result['选择'])
+                                if not is_selected
+                            ]
                         ]
-                    ]
-                    
-                    # 添加新选择的条款
-                    st.session_state.selected_clauses.extend(current_page_selected)
-                    
-                    # 检查选择状态是否发生变化
-                    current_selection = [c['UUID'] for c in st.session_state.selected_clauses]
-                    if current_selection != st.session_state.previous_selection:
-                        st.session_state.previous_selection = current_selection
-                        st.rerun()
+                        
+                        # 添加新选择的条款
+                        st.session_state.selected_clauses.extend(current_page_selected)
+                        
+                        # 使用session_state来控制刷新
+                        if 'refresh_counter' not in st.session_state:
+                            st.session_state.refresh_counter = 0
+                        st.session_state.refresh_counter += 1
+                        
+                        # 每隔几次选择才刷新一次页面
+                        if st.session_state.refresh_counter >= 3:
+                            st.session_state.refresh_counter = 0
+                            st.rerun()
             else:
                 st.info("没有找到匹配的条款")
         else:

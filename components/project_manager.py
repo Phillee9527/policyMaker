@@ -104,18 +104,52 @@ class ProjectManager:
         return memory_zip.getvalue()
     
     def import_project(self, name, project_data):
+        """导入项目"""
         project_dir = os.path.join(self.base_dir, name)
         
+        # 如果目录存在，先尝试关闭所有可能的文件句柄
         if os.path.exists(project_dir):
-            shutil.rmtree(project_dir)
+            try:
+                # 如果存在数据库连接，先关闭它
+                if hasattr(self, 'db') and self.db:
+                    self.db.session.close()
+                    self.db.engine.dispose()
+                
+                # 在 Windows 上等待一小段时间以确保文件句柄被释放
+                import time
+                time.sleep(0.1)
+                
+                # 使用 force 选项删除目录
+                import stat
+                def remove_readonly(func, path, excinfo):
+                    os.chmod(path, stat.S_IWRITE)
+                    func(path)
+                
+                shutil.rmtree(project_dir, onerror=remove_readonly)
+            except Exception as e:
+                st.error(f"无法删除现有项目目录: {str(e)}")
+                return None
         
-        os.makedirs(project_dir)
-        
-        memory_zip = io.BytesIO(project_data)
-        with zipfile.ZipFile(memory_zip, 'r') as zf:
-            zf.extractall(project_dir)
-        
-        return self.load_project(name)
+        try:
+            # 创建新的项目目录
+            os.makedirs(project_dir)
+            
+            # 解压项目文件
+            memory_zip = io.BytesIO(project_data)
+            with zipfile.ZipFile(memory_zip, 'r') as zf:
+                zf.extractall(project_dir)
+            
+            # 加载项目
+            return self.load_project(name)
+        except Exception as e:
+            st.error(f"导入项目失败: {str(e)}")
+            # 如果导入失败，清理目录
+            if os.path.exists(project_dir):
+                try:
+                    shutil.rmtree(project_dir, onerror=remove_readonly)
+                except:
+                    pass
+            return None
 
 def render_project_manager():
     st.sidebar.title("项目管理")
