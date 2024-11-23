@@ -2,14 +2,29 @@ import os
 from datetime import datetime
 import sqlite3
 import pandas as pd
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Float
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, Float, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, relationship
 import io
 import streamlit as st
+import uuid
 
 # 创建基类
 Base = declarative_base()
+
+class InsurancePolicy(Base):
+    """保险方案模型"""
+    __tablename__ = 'insurance_policies'
+
+    id = Column(Integer, primary_key=True)
+    uuid = Column(String(50), unique=True, nullable=False)
+    name = Column(String(200), nullable=False)
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # 关联的条款版本
+    clause_versions = relationship("PolicyClauseVersion", back_populates="policy")
 
 class Clause(Base):
     """条款模型"""
@@ -28,17 +43,39 @@ class Clause(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # 关联的版本历史
+    versions = relationship("ClauseVersion", back_populates="clause")
 
 class ClauseVersion(Base):
     """条款版本历史"""
     __tablename__ = 'clause_versions'
 
     id = Column(Integer, primary_key=True)
-    clause_uuid = Column(String(50), nullable=False)
+    clause_uuid = Column(String(50), ForeignKey('clauses.uuid'), nullable=False)
     version_number = Column(Integer, nullable=False)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # 关联的条款
+    clause = relationship("Clause", back_populates="versions")
+    # 关联的保险方案版本
+    policy_versions = relationship("PolicyClauseVersion", back_populates="clause_version")
+
+class PolicyClauseVersion(Base):
+    """保险方案条款版本关联表"""
+    __tablename__ = 'policy_clause_versions'
+
+    id = Column(Integer, primary_key=True)
+    policy_id = Column(Integer, ForeignKey('insurance_policies.id'), nullable=False)
+    clause_version_id = Column(Integer, ForeignKey('clause_versions.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # 关联的保险方案
+    policy = relationship("InsurancePolicy", back_populates="clause_versions")
+    # 关联的条款版本
+    clause_version = relationship("ClauseVersion", back_populates="policy_versions")
 
 class Database:
     def __init__(self, db_path=None):
@@ -70,6 +107,76 @@ class Database:
         Base.metadata.create_all(self.engine)
         Session = sessionmaker(bind=self.engine)
         self.session = Session()
+        
+        # 导出类型供外部使用
+        self.Clause = Clause
+        self.ClauseVersion = ClauseVersion
+        self.InsurancePolicy = InsurancePolicy
+        self.PolicyClauseVersion = PolicyClauseVersion
+
+    def create_policy(self, name, description=""):
+        """创建保险方案"""
+        policy = InsurancePolicy(
+            uuid=str(uuid.uuid4()),
+            name=name,
+            description=description
+        )
+        self.session.add(policy)
+        self.session.commit()
+        return policy
+
+    def get_policy(self, policy_id):
+        """获取保险方案"""
+        return self.session.query(InsurancePolicy).filter_by(id=policy_id).first()
+
+    def update_policy(self, policy_id, name=None, description=None):
+        """更新保险方案"""
+        policy = self.get_policy(policy_id)
+        if policy:
+            if name:
+                policy.name = name
+            if description:
+                policy.description = description
+            self.session.commit()
+            return True
+        return False
+
+    def delete_policy(self, policy_id):
+        """删除保险方案"""
+        policy = self.get_policy(policy_id)
+        if policy:
+            self.session.delete(policy)
+            self.session.commit()
+            return True
+        return False
+
+    def add_clause_to_policy(self, policy_id, clause_version_id):
+        """添加条款版本到保险方案"""
+        policy_clause = PolicyClauseVersion(
+            policy_id=policy_id,
+            clause_version_id=clause_version_id
+        )
+        self.session.add(policy_clause)
+        self.session.commit()
+        return policy_clause
+
+    def remove_clause_from_policy(self, policy_id, clause_version_id):
+        """从保险方案中移除条款版本"""
+        policy_clause = self.session.query(PolicyClauseVersion).filter_by(
+            policy_id=policy_id,
+            clause_version_id=clause_version_id
+        ).first()
+        if policy_clause:
+            self.session.delete(policy_clause)
+            self.session.commit()
+            return True
+        return False
+
+    def get_policy_clauses(self, policy_id):
+        """获取保险方案的所有条款版本"""
+        return self.session.query(PolicyClauseVersion).filter_by(
+            policy_id=policy_id
+        ).all()
 
     def import_clauses(self, df):
         """导入条款数据"""
@@ -340,6 +447,8 @@ class Database:
         """清空数据库"""
         self.session.query(Clause).delete()
         self.session.query(ClauseVersion).delete()
+        self.session.query(InsurancePolicy).delete()
+        self.session.query(PolicyClauseVersion).delete()
         self.session.commit()
 
     def export_database(self):
