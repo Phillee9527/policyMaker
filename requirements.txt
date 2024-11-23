@@ -4,5 +4,4 @@ openpyxl
 python-docx
 Markdown
 SQLAlchemy
-pandas-xlsx-writer
 python-dotenv

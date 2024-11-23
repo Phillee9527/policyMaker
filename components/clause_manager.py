@@ -13,16 +13,40 @@ def export_clauses(clauses, format):
 
 def handle_version_select(db, clause_uuid, version):
     """处理版本选择"""
-    db.activate_clause_version(clause_uuid, version)
+    if db.activate_clause_version(clause_uuid, version):
+        # 获取更新后的条款内容
+        clause = db.session.query(db.Clause).filter_by(uuid=clause_uuid).first()
+        if clause:
+            # 更新session state中的条款内容
+            st.session_state.selected_clauses = [
+                {
+                    **c,
+                    '扩展条款正文': clause.content,
+                    '版本号': clause.version_number,
+                    '扩展条款标题': clause.title
+                } if c['UUID'] == clause_uuid else c
+                for c in st.session_state.selected_clauses
+            ]
+            st.rerun()
 
 def handle_version_delete(db, clause_uuid, version):
     """处理版本删除"""
     if db.delete_clause_version(clause_uuid, version):
         st.success("版本删除成功")
+        st.rerun()
     else:
         st.error("无法删除最后一个版本")
 
+def handle_content_save(db, clause_uuid, content):
+    """处理内容保存"""
+    if db.update_clause(clause_uuid, content=content):
+        st.success("保存成功")
+        st.rerun()
+    else:
+        st.error("保存失败")
+
 def render_clause_manager():
+    """渲染条款管理界面"""
     st.markdown("""
     <style>
     .stDataFrame {
@@ -301,29 +325,18 @@ def render_clause_manager():
                     # 获取条款版本历史
                     versions = db.get_clause_versions(clause['UUID'])
                     
-                    # 渲染版本标签
-                    render_version_tags(
+                    # 渲染版本标签并获取编辑后的内容
+                    content, should_save = render_version_tags(
                         versions,
                         clause['版本号'],
                         lambda version: handle_version_select(db, clause['UUID'], version),
                         lambda version: handle_version_delete(db, clause['UUID'], version),
-                        f"clause_{clause['UUID']}"  # 使用条款的UUID作为key前缀
+                        f"clause_{clause['UUID']}",  # 使用条款的UUID作为key前缀
+                        clause['扩展条款正文']  # 传递当前内容
                     )
                     
-                    # 显示当前版本内容
-                    edited_content = st.text_area(
-                        "编辑条款内容",
-                        value=clause['扩展条款正文'],
-                        height=300,
-                        key=f"edit_{clause['UUID']}"  # 使用UUID作为key
-                    )
-                    
-                    if st.button("保存", key=f"save_{clause['UUID']}"):  # 使用UUID作为key
-                        db.update_clause(
-                            clause['UUID'],
-                            content=edited_content
-                        )
-                        st.success("保存成功")
-                        st.rerun()  # 强制重新渲染
+                    # 如果需要保存，则保存内容
+                    if should_save:
+                        handle_content_save(db, clause['UUID'], content)
         else:
             st.info("还未选择任何条款")
