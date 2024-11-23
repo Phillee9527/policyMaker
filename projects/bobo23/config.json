@@ -1,0 +1,67 @@
+{
+  "name": "魏家冲测试",
+  "description": "湖北魏家冲抽蓄项目保险方案文件",
+  "created_at": "2024-11-23T13:06:16.269130",
+  "updated_at": "2024-11-23T15:48:35.262118",
+  "state": {
+    "insurance_data": {
+      "policyholder": "ceui mkingd",
+      "insured": {
+        "name": "dfsfgklk",
+        "id_type": "统一社会信用代码",
+        "id_number": "sdfsdgsdfhsdfgsdgsg",
+        "contact": {
+          "name": "sdfsdfasfas",
+          "phone": "asdfsdf",
+          "email": "asdfadgsdfg@qq.com",
+          "address": "",
+          "postal_code": ""
+        }
+      },
+      "property": {
+        "name": "",
+        "address": ""
+      },
+      "material_loss": [
+        {
+          "标的类别": "",
+          "保险金额（元）": "",
+          "费率（%）": "",
+          "保费（元）": ""
+        },
+        {
+          "标的类别": "",
+          "保险金额（元）": "",
+          "费率（%）": "",
+          "保费（元）": ""
+        },
+        {
+          "标的类别": "",
+          "保险金额（元）": "",
+          "费率（%）": "",
+          "保费（元）": ""
+        }
+      ],
+      "liability": [
+        {
+          "限额名称": "",
+          "责任限额（元）": "",
+          "保费（元）": ""
+        },
+        {
+          "限额名称": "",
+          "责任限额（元）": "",
+          "保费（元）": ""
+        },
+        {
+          "限额名称": "",
+          "责任限额（元）": "",
+          "保费（元）": ""
+        }
+      ]
+    },
+    "selected_clauses": [],
+    "filters": {},
+    "search_term": ""
+  }
+}
