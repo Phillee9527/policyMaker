@@ -17,21 +17,27 @@ def render_version_tags(versions, current_version, on_version_select, on_version
             timestamp = version.created_at.strftime('%Y%m%d%H%M%S')
             
             # 显示版本标签和删除按钮
-            if st.button(
-                f"V{version.version_number}\n{version.created_at.strftime('%m-%d %H:%M')}",
-                key=f"version_{key_prefix}_{version.version_number}_{timestamp}_{unique_id}",
-                type="primary" if is_current else "secondary",
-                help="点击切换到此版本",
-                use_container_width=True
-            ):
-                on_version_select(version.version_number)
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                if st.button(
+                    f"V{version.version_number}\n{version.created_at.strftime('%m-%d %H:%M')}",
+                    key=f"version_{key_prefix}_{version.version_number}_{timestamp}_{unique_id}",
+                    type="primary" if is_current else "secondary",
+                    help="点击切换到此版本",
+                    use_container_width=True
+                ):
+                    on_version_select(version.version_number)
+                    st.rerun()  # 强制重新渲染
             
             # 只有非当前版本且不是唯一版本时才显示删除按钮
             if not is_current and len(versions) > 1:
-                if st.button(
-                    "删除此版本",
-                    key=f"delete_{key_prefix}_{version.version_number}_{timestamp}_{unique_id}",
-                    type="secondary",
-                    use_container_width=True
-                ):
-                    on_version_delete(version.version_number)
+                with col2:
+                    if st.button(
+                        "×",
+                        key=f"delete_{key_prefix}_{version.version_number}_{timestamp}_{unique_id}",
+                        type="secondary",
+                        help="删除此版本",
+                        use_container_width=True
+                    ):
+                        on_version_delete(version.version_number)
+                        st.rerun()  # 强制重新渲染

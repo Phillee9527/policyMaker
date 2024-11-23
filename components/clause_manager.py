@@ -14,13 +14,11 @@ def export_clauses(clauses, format):
 def handle_version_select(db, clause_uuid, version):
     """处理版本选择"""
     db.activate_clause_version(clause_uuid, version)
-    st.rerun()
 
 def handle_version_delete(db, clause_uuid, version):
     """处理版本删除"""
     if db.delete_clause_version(clause_uuid, version):
         st.success("版本删除成功")
-        st.rerun()
     else:
         st.error("无法删除最后一个版本")
 
@@ -317,15 +315,15 @@ def render_clause_manager():
                         "编辑条款内容",
                         value=clause['扩展条款正文'],
                         height=300,
-                        key=f"edit_{i}"
+                        key=f"edit_{clause['UUID']}"  # 使用UUID作为key
                     )
                     
-                    if st.button("保存", key=f"save_{i}"):
+                    if st.button("保存", key=f"save_{clause['UUID']}"):  # 使用UUID作为key
                         db.update_clause(
                             clause['UUID'],
                             content=edited_content
                         )
                         st.success("保存成功")
-                        st.rerun()
+                        st.rerun()  # 强制重新渲染
         else:
             st.info("还未选择任何条款")
