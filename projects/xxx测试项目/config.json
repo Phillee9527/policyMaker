@@ -1,0 +1,12 @@
+{
+  "name": "xxx测试项目",
+  "description": "这是一个新的保险采购项目",
+  "created_at": "2024-11-24T20:47:30.963628",
+  "updated_at": "2024-11-24T20:47:30.963635",
+  "state": {
+    "insurance_data": null,
+    "selected_clauses": [],
+    "filters": {},
+    "search_term": ""
+  }
+}

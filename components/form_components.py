@@ -87,12 +87,20 @@ def render_insurance_form():
     def subsection_header(text):
         st.markdown(f"## {text}")
     
-    # 初始化session state
+    # 初始化 session_state
     if 'insurance_data' not in st.session_state:
         st.session_state.insurance_data = {}
     
-    # 从session state获取已保存的数据，确保有默认值
-    insurance_data = st.session_state.get('insurance_data', {}) or {}
+    # 确保 insurance_data 不为 None
+    if st.session_state.insurance_data is None:
+        st.session_state.insurance_data = {}
+    
+    # 从session state获取已保存的数据
+    insurance_data = st.session_state.insurance_data
+    
+    # 确保 other_info_data 存在
+    if 'other_info_data' not in insurance_data:
+        insurance_data['other_info_data'] = {}
     
     # 表单部分
     with st.form("insurance_form"):
@@ -293,7 +301,7 @@ def render_insurance_form():
                 "liability": liability_data.to_dict('records'),
                 "deductibles": deductibles_data.to_dict('records'),
                 "other_info_tabs": st.session_state.other_info_tabs,
-                "other_info_data": st.session_state.insurance_data.get('other_info_data', {})
+                "other_info_data": insurance_data.get('other_info_data', {})
             }
             st.session_state.insurance_data = insurance_data
             st.success("🎉 信息已成功保存！")
@@ -359,7 +367,8 @@ def render_insurance_form():
         for i, (tab, tab_content) in enumerate(zip(st.session_state.other_info_tabs, other_info_tabs)):
             with tab_content:
                 # 更安全地获取已保存的数据
-                saved_data = insurance_data.get('other_info_data', {}).get(
+                other_info_data = insurance_data.get('other_info_data', {})
+                saved_data = other_info_data.get(
                     tab['id'],
                     [{"项目": "", "内容说明": ""}]
                 )
@@ -386,13 +395,9 @@ def render_insurance_form():
                     key=f"other_info_table_{tab['id']}_{i}"
                 )
                 
-                # 更安全地保存表格数据到session state
-                if 'insurance_data' not in st.session_state:
-                    st.session_state.insurance_data = {}
-                if 'other_info_data' not in st.session_state.insurance_data:
-                    st.session_state.insurance_data['other_info_data'] = {}
-                st.session_state.insurance_data['other_info_data'][tab['id']] = tab_data.to_dict('records')
+                # 更安全地保存表格数据
+                insurance_data['other_info_data'][tab['id']] = tab_data.to_dict('records')
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    return st.session_state.insurance_data
+    return insurance_data
