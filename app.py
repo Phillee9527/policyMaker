@@ -4,6 +4,7 @@ from components.form_components import render_insurance_form
 from components.clause_manager import render_clause_manager
 from components.document_generator import generate_document
 from components.project_manager import render_project_manager
+from welcome import show_welcome_screen, should_show_welcome
 
 def init_session_state():
     """初始化session state"""
@@ -19,6 +20,12 @@ def init_session_state():
         st.session_state.project_dir = None
 
 def main():
+    # 检查是否需要显示欢迎页面
+    if should_show_welcome():
+        show_welcome_screen()
+        return
+    
+    # 原有的主程序代码
     st.set_page_config(
         page_title="📋 保险方案生成平台",
         page_icon="📋",
