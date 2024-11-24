@@ -178,6 +178,9 @@ def render_clause_content(clause, db):
 
 def render_selected_clauses(clauses, db, page_size=25):
     """分页渲染已选条款"""
+    # 使用markdown渲染标题以应用样式
+    st.markdown("## 已选条款")
+    
     # 计算总条款数和总页数
     total_clauses = len(clauses)
     total_pages = max(1, (total_clauses + page_size - 1) // page_size)
@@ -244,50 +247,25 @@ def render_clause_manager():
     """渲染条款管理界面"""
     logger.debug("\n=== 开始渲染条款管理界面 ===")
     
-    # 初始化 version_info
-    if 'version_info' not in st.session_state:
-        st.session_state.version_info = {}
-    
-    # 创建两个独立的容器，而不是使用列
-    left_container = st.container()
-    right_container = st.container()
-    
-    # 使用CSS设置布局
-    st.markdown("""
-    <style>
-    .stDataFrame {
-        width: 100% !important;
-    }
-    .main .block-container {
-        padding-top: 1rem;
-        padding-right: 1rem;
-        padding-left: 1rem;
-        padding-bottom: 1rem;
-    }
-    [data-testid="stHorizontalBlock"] {
-        gap: 0.5rem;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
     # 初始化数据库
     db = Database()
     
-    # 初始化session state
-    if 'selected_clauses' not in st.session_state:
-        st.session_state.selected_clauses = []
-    if 'previous_selection' not in st.session_state:
-        st.session_state.previous_selection = []
+    # 使用markdown渲染标题以应用样式
+    st.markdown("# 条款管理")
     
-    # 使用两列布局，但是通过CSS控制宽度和间距
+    # 创建两个独立的容器
+    left_container = st.container()
+    right_container = st.container()
+    
+    # 使用两列布局
     col1, col2 = st.columns([2, 1])
     
     # 左侧条款管理区域
     with col1:
         with left_container:
-            st.header("条款管理")
+            # 数据库操作按钮区域
+            st.markdown('<div class="db-operations">', unsafe_allow_html=True)
             
-            # 数据库操作按钮行
             db_col1, db_col2, db_col3 = st.columns(3)
             with db_col1:
                 if st.button("清空数据库"):
@@ -313,6 +291,8 @@ def render_clause_manager():
                     st.success("数据库导入成功")
                     st.rerun()
             
+            st.markdown('</div>', unsafe_allow_html=True)
+            
             # 文件上传区域
             uploaded_file = st.file_uploader("导入条款库", type=['csv', 'xlsx'])
             if uploaded_file is not None:
@@ -326,13 +306,14 @@ def render_clause_manager():
                 except Exception as e:
                     st.error(f"文件导入错误：{str(e)}")
             
-            # 条款列表和筛选区域
+            # 筛选条件部分
+            st.markdown("## 筛选条件")
             render_clause_list(db)
     
     # 右侧已选条款区域
     with col2:
         with right_container:
-            st.header(f"已选条款 (共{len(st.session_state.selected_clauses)}个)")
+            st.markdown(f"## 已选条款 (共{len(st.session_state.selected_clauses)}个)")
             if st.session_state.selected_clauses:
                 # 导出选项
                 export_format = st.selectbox(
@@ -383,7 +364,7 @@ def render_clause_list(db):
     clauses_df = db.export_clauses('dataframe')
     if not clauses_df.empty:
         # 创建筛选条件
-        st.subheader("筛选条件")
+        st.markdown("## 筛选条件")
         filter_cols = st.columns(3)
         
         # 动态生成筛选框

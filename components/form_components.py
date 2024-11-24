@@ -3,13 +3,89 @@ import pandas as pd
 
 def render_insurance_form():
     """渲染投保信息表单"""
+    # 添加自定义CSS样式
     st.markdown("""
     <style>
+    /* 原有的样式保持不变 */
     .special-terms-editor {
         min-height: 200px !important;
     }
+    
+    /* 页面最顶层标题样式 (项目名称等) */
+    .main h1:first-of-type {
+        color: #1e3d59 !important;  /* 藏蓝色 */
+        font-size: 1.5rem !important;  /* 较大字号 */
+        font-weight: 600 !important;
+        margin-top: 0.5em !important;
+        margin-bottom: 1em !important;
+    }
+    
+    /* 主要section标题样式 (投保人信息、被保险人信息等) */
+    .main > .block-container h1 {
+        color: #1e3d59 !important;  /* 藏蓝色 */
+        font-size: 1.3rem !important;  /* 比正文大2号 */
+        font-weight: 500 !important;
+        margin-top: 1.2em !important;
+        margin-bottom: 0.8em !important;
+        border-bottom: 1px solid #e6e6e6;
+        padding-bottom: 0.3em;
+    }
+    
+    /* 子标题样式保持不变 */
+    .stMarkdown h2 {
+        color: #1e3d59 !important;
+        font-size: 1.1rem !important;
+        font-weight: 500 !important;
+        margin-top: 1.2em !important;
+        margin-bottom: 0.6em !important;
+    }
+    
+    /* 确保表单中的标题也使用相同样式 */
+    .stForm h1 {
+        color: #1e3d59 !important;
+        font-size: 1.3rem !important;
+        font-weight: 500 !important;
+        border-bottom: 1px solid #e6e6e6;
+        padding-bottom: 0.3em;
+    }
+    
+    /* 调整标签文字大小 */
+    .stTextInput label, .stTextArea label, .stSelectbox label {
+        font-size: 1rem !important;
+    }
+    
+    /* 其他信息区域样式 */
+    .other-info-container {
+        background-color: #f8f9fa;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        border: 1px solid #e9ecef;
+        margin: 1rem 0;
+    }
+    
+    /* 其他信息标题样式 */
+    .other-info-title {
+        color: #1e3d59 !important;
+        font-size: 1.3rem !important;
+        font-weight: 500 !important;
+        margin-bottom: 1rem !important;
+        padding-bottom: 0.3em;
+        border-bottom: 1px solid #e6e6e6;
+    }
+    
+    /* 其他信息内容样式 */
+    .other-info-content {
+        padding: 0.5rem 0;
+    }
     </style>
     """, unsafe_allow_html=True)
+    
+    # 使用markdown来渲染标题，以应用自定义样式
+    def section_header(text):
+        st.markdown(f"# {text}")
+    
+    def subsection_header(text):
+        st.markdown(f"## {text}")
     
     # 初始化session state
     if 'insurance_data' not in st.session_state:
@@ -18,58 +94,16 @@ def render_insurance_form():
     # 从session state获取已保存的数据
     insurance_data = st.session_state.insurance_data or {}
     
-    # 其他信息选项卡管理（移到表单外部）
-    st.header("其他信息")
-    
-    # 初始化其他信息的选项卡配置
-    if 'other_info_tabs' not in st.session_state:
-        st.session_state.other_info_tabs = [{"name": "新选项卡1", "id": "tab1"}]
-    
-    # 添加新选项卡的按钮
-    if st.button("添加新选项卡", key="add_tab"):
-        new_tab_id = f"tab{len(st.session_state.other_info_tabs) + 1}"
-        st.session_state.other_info_tabs.append({
-            "name": f"新选项卡{len(st.session_state.other_info_tabs) + 1}",
-            "id": new_tab_id
-        })
-        st.rerun()
-    
-    # 渲染选项卡编辑区域
-    tab_names = []
-    tabs_to_remove = []
-    
-    for i, tab in enumerate(st.session_state.other_info_tabs):
-        col1, col2, col3 = st.columns([3, 1, 1])
-        with col1:
-            new_name = st.text_input(
-                "选项卡名称",
-                value=tab["name"],
-                key=f"tab_name_{tab['id']}"
-            )
-            tab["name"] = new_name
-            tab_names.append(new_name)
-        
-        with col2:
-            if st.button("删除", key=f"delete_{tab['id']}"):
-                tabs_to_remove.append(tab)
-    
-    # 处理要删除的选项卡
-    for tab in tabs_to_remove:
-        st.session_state.other_info_tabs.remove(tab)
-        if 'insurance_data' in st.session_state and 'other_info_data' in st.session_state.insurance_data:
-            st.session_state.insurance_data['other_info_data'].pop(tab['id'], None)
-        st.rerun()
-    
-    # 表单部分开始
+    # 表单部分
     with st.form("insurance_form"):
-        st.header("投保人信息")
+        section_header("投保人信息")
         policyholder_name = st.text_area(
             "名称",
             value=insurance_data.get('policyholder', ''),
             height=100
         )
         
-        st.header("被保险人信息")
+        section_header("被保险人信息")
         insured_name = st.text_area(
             "被保险人名称",
             value=insurance_data.get('insured', {}).get('name', ''),
@@ -111,7 +145,7 @@ def render_insurance_form():
             value=insurance_data.get('insured', {}).get('contact', {}).get('postal_code', '')
         )
         
-        st.header("被保险人标的地址")
+        section_header("被保险人标的地址")
         property_name = st.text_input(
             "标的名称",
             value=insurance_data.get('property', {}).get('name', '')
@@ -121,13 +155,13 @@ def render_insurance_form():
             value=insurance_data.get('property', {}).get('address', '')
         )
         
-        st.header("主险")
+        section_header("主险")
         
         # 使用选项卡来展示不同部分
         insurance_tabs = st.tabs(["物质损失", "第三者责任", "免赔额"])
         
         with insurance_tabs[0]:
-            st.subheader("第一部分 物质损失")
+            subsection_header("第一部分 物质损失")
             
             # 使用container和custom CSS来控制表格宽度
             with st.container():
@@ -175,7 +209,7 @@ def render_insurance_form():
                 )
         
         with insurance_tabs[1]:
-            st.subheader("第二部分 第三者责任")
+            subsection_header("第二部分 第三者责任")
             
             # 获取已保存的第三者责任数据
             saved_liability = insurance_data.get('liability', [{"限额名称": "", "责任限额（元）": "", "保费（元）": ""}] * 3)
@@ -206,7 +240,7 @@ def render_insurance_form():
             )
         
         with insurance_tabs[2]:
-            st.subheader("免赔额")
+            subsection_header("免赔额")
             
             # 获取已保存的免赔额数据
             saved_deductibles = insurance_data.get('deductibles', [{"免赔项目": "", "免赔额 / 免赔约定": ""}])
@@ -230,46 +264,6 @@ def render_insurance_form():
                 },
                 hide_index=True
             )
-        
-        # 其他信息表格编辑部分
-        if st.session_state.other_info_tabs:
-            other_info_tabs = st.tabs(tab_names)
-            
-            # 渲染每个选项卡的内容
-            for i, (tab, tab_content) in enumerate(zip(st.session_state.other_info_tabs, other_info_tabs)):
-                with tab_content:
-                    # 获取已保存的数据
-                    saved_data = st.session_state.insurance_data.get('other_info_data', {}).get(
-                        tab['id'],
-                        [{"项目": "", "内容说明": ""}]
-                    )
-                    
-                    # 创建数据编辑器
-                    tab_data = st.data_editor(
-                        pd.DataFrame(saved_data),
-                        num_rows="dynamic",
-                        use_container_width=True,
-                        column_config={
-                            "项目": st.column_config.TextColumn(
-                                "项目",
-                                width="small",
-                                required=True
-                            ),
-                            "内容说明": st.column_config.TextColumn(
-                                "内容说明",
-                                width="large",
-                                required=True,
-                                max_chars=1000
-                            )
-                        },
-                        hide_index=True,
-                        key=f"table_{tab['id']}"
-                    )
-                    
-                    # 保存表格数据到session state
-                    if 'other_info_data' not in st.session_state.insurance_data:
-                        st.session_state.insurance_data['other_info_data'] = {}
-                    st.session_state.insurance_data['other_info_data'][tab['id']] = tab_data.to_dict('records')
         
         submit_button = st.form_submit_button("保存信息")
         
@@ -300,5 +294,99 @@ def render_insurance_form():
             }
             st.session_state.insurance_data = insurance_data
             st.success("信息已保存")
+    
+    # 添加分隔线
+    st.markdown("---")
+    
+    # 其他信息部分（移到表单后）
+    st.markdown('<div class="other-info-container">', unsafe_allow_html=True)
+    st.markdown('<p class="other-info-title">其他信息</p>', unsafe_allow_html=True)
+    
+    # 初始化其他信息的选项卡配置
+    if 'other_info_tabs' not in st.session_state:
+        st.session_state.other_info_tabs = [{"name": "新选项卡1", "id": "tab1", "order": 0}]
+    
+    # 使用data_editor管理选项卡
+    tabs_df = pd.DataFrame(st.session_state.other_info_tabs)
+    edited_tabs = st.data_editor(
+        tabs_df,
+        column_config={
+            "name": st.column_config.TextColumn(
+                "选项卡名称",
+                width="medium",
+                required=True
+            ),
+            "id": st.column_config.TextColumn(
+                "ID",
+                width="small",
+                disabled=True
+            ),
+            "order": st.column_config.NumberColumn(
+                "排序",
+                width="small",
+                disabled=True,
+                default=0
+            )
+        },
+        hide_index=True,
+        num_rows="dynamic",
+        key="tabs_editor"
+    )
+    
+    # 添加新选项卡的按钮
+    if st.button("添加新选项卡", key="add_tab"):
+        new_tab_id = f"tab{len(st.session_state.other_info_tabs) + 1}"
+        st.session_state.other_info_tabs.append({
+            "name": f"新选项卡{len(st.session_state.other_info_tabs) + 1}",
+            "id": new_tab_id,
+            "order": len(st.session_state.other_info_tabs)
+        })
+        st.rerun()
+    
+    # 更新选项卡配置
+    st.session_state.other_info_tabs = edited_tabs.to_dict('records')
+    
+    # 创建动态选项卡
+    if st.session_state.other_info_tabs:
+        tab_names = [tab["name"] for tab in st.session_state.other_info_tabs]
+        other_info_tabs = st.tabs(tab_names)
+        
+        # 渲染每个选项卡的内容
+        for i, (tab, tab_content) in enumerate(zip(st.session_state.other_info_tabs, other_info_tabs)):
+            with tab_content:
+                # 获取已保存的数据
+                saved_data = st.session_state.insurance_data.get('other_info_data', {}).get(
+                    tab['id'],
+                    [{"项目": "", "内容说明": ""}]
+                )
+                
+                # 创建数据编辑器，使用唯一的key
+                tab_data = st.data_editor(
+                    pd.DataFrame(saved_data),
+                    num_rows="dynamic",
+                    use_container_width=True,
+                    column_config={
+                        "项目": st.column_config.TextColumn(
+                            "项目",
+                            width="small",
+                            required=True
+                        ),
+                        "内容说明": st.column_config.TextColumn(
+                            "内容说明",
+                            width="large",
+                            required=True,
+                            max_chars=1000
+                        )
+                    },
+                    hide_index=True,
+                    key=f"other_info_table_{tab['id']}_{i}"  # 使用更具唯一性的key
+                )
+                
+                # 保存表格数据到session state
+                if 'other_info_data' not in st.session_state.insurance_data:
+                    st.session_state.insurance_data['other_info_data'] = {}
+                st.session_state.insurance_data['other_info_data'][tab['id']] = tab_data.to_dict('records')
+    
+    st.markdown('</div>', unsafe_allow_html=True)
     
     return st.session_state.insurance_data

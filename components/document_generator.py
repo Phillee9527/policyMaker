@@ -135,20 +135,41 @@ def generate_docx(insurance_data, selected_clauses):
     """生成带目录的DOCX格式保险方案"""
     doc = Document()
     
-    # 设置标题样式
+    # 设置默认字体为仿宋
+    style = doc.styles['Normal']
+    style.font.name = '仿宋'
+    style._element.rPr.rFonts.set(qn('w:eastAsia'), '仿宋')
+    
+    # 设置一级标题样式（文档标题）
     title_style = doc.styles['Heading 1']
+    title_style.font.name = '仿宋'
+    title_style._element.rPr.rFonts.set(qn('w:eastAsia'), '仿宋')
     title_style.font.size = Pt(16)
     title_style.font.bold = True
+    
+    # 设置二级标题样式（主要章节：投保人、被保险人等）
+    heading1_style = doc.styles['Heading 2']
+    heading1_style.font.name = '黑体'
+    heading1_style._element.rPr.rFonts.set(qn('w:eastAsia'), '黑体')
+    heading1_style.font.size = Pt(14)
+    heading1_style.font.bold = True
+    
+    # 设置三级标题样式（子章节：物质损失、第三者责任等）
+    heading2_style = doc.styles['Heading 3']
+    heading2_style.font.name = '黑体'
+    heading2_style._element.rPr.rFonts.set(qn('w:eastAsia'), '黑体')
+    heading2_style.font.size = Pt(12)
+    heading2_style.font.bold = True
     
     # 添加文档标题
     doc.add_heading('保险方案', 0)
     
     # 投保人信息
-    doc.add_heading('投保人', level=1)
+    doc.add_heading('投保人', level=2)  # 改为二级标题
     doc.add_paragraph(f"名称：{insurance_data['policyholder']}")
     
     # 被保险人信息
-    doc.add_heading('被保险人', level=1)
+    doc.add_heading('被保险人', level=2)  # 改为二级标题
     doc.add_paragraph(f"名称：{insurance_data['insured']['name']}")
     doc.add_paragraph(f"证件类型：{insurance_data['insured']['id_type']} 证件号码：{insurance_data['insured']['id_number']}")
     doc.add_paragraph(
@@ -162,15 +183,15 @@ def generate_docx(insurance_data, selected_clauses):
     )
     
     # 被保险人标的地址
-    doc.add_heading('被保险人标的地址', level=1)
+    doc.add_heading('被保险人标的地址', level=2)  # 改为二级标题
     doc.add_paragraph(f"名称：{insurance_data['property']['name']}")
     doc.add_paragraph(f"地址：{insurance_data['property']['address']}")
     
     # 主险
-    doc.add_heading('主险', level=1)
+    doc.add_heading('主险', level=2)  # 改为二级标题
     
     # 物质损失表格
-    doc.add_heading('第一部分 物质损失', level=2)
+    doc.add_heading('第一部分 物质损失', level=3)  # 使用三级标题
     table = doc.add_table(rows=1, cols=4)
     table.style = 'Table Grid'
     header_cells = table.rows[0].cells
@@ -187,7 +208,7 @@ def generate_docx(insurance_data, selected_clauses):
         row_cells[3].text = str(item['保费（元）'])
     
     # 第三者责任表格
-    doc.add_heading('第二部分 第三者责任', level=2)
+    doc.add_heading('第二部分 第三者责任', level=3)  # 使用三级标题
     table = doc.add_table(rows=1, cols=3)
     table.style = 'Table Grid'
     header_cells = table.rows[0].cells
@@ -202,7 +223,7 @@ def generate_docx(insurance_data, selected_clauses):
         row_cells[2].text = str(item['保费（元）'])
     
     # 免赔额表格
-    doc.add_heading('第三部分 免赔额', level=2)
+    doc.add_heading('第三部分 免赔额', level=3)  # 使用三级标题
     table = doc.add_table(rows=1, cols=2)
     table.style = 'Table Grid'
     header_cells = table.rows[0].cells
@@ -216,12 +237,12 @@ def generate_docx(insurance_data, selected_clauses):
     
     # 添加其他信息部分
     if 'other_info_tabs' in insurance_data and 'other_info_data' in insurance_data:
-        doc.add_heading('其他信息', level=1)
+        doc.add_heading('其他信息', level=2)  # 改为二级标题
         
         for tab in insurance_data['other_info_tabs']:
             tab_data = insurance_data['other_info_data'].get(tab['id'], [])
             if tab_data:
-                doc.add_heading(tab['name'], level=2)
+                doc.add_heading(tab['name'], level=3)  # 使用三级标题
                 table = doc.add_table(rows=1, cols=2)
                 table.style = 'Table Grid'
                 header_cells = table.rows[0].cells
@@ -235,12 +256,12 @@ def generate_docx(insurance_data, selected_clauses):
     
     # 特别约定
     if 'special_terms' in insurance_data and insurance_data['special_terms']:
-        doc.add_heading('特别约定', level=1)
+        doc.add_heading('特别约定', level=2)  # 改为二级标题
         for i, term in enumerate(insurance_data['special_terms'], 1):
             doc.add_paragraph(f"{i}. {term}")
     
-    # 添加扩展条款目录
-    doc.add_heading('扩展条款目录', level=1)
+    # 扩展条款目录
+    doc.add_heading('扩展条款目录', level=2)  # 改为二级标题
     for i, clause in enumerate(selected_clauses, 1):
         paragraph = doc.add_paragraph()
         # 添加目录项和超链接
@@ -250,13 +271,13 @@ def generate_docx(insurance_data, selected_clauses):
     doc.add_page_break()
     
     # 扩展条款
-    doc.add_heading('扩展条款', level=1)
+    doc.add_heading('扩展条款', level=2)  # 改为二级标题
     for i, clause in enumerate(selected_clauses, 1):
         # 添加条款标题（带书签）
         paragraph = doc.add_paragraph()
         add_bookmark(paragraph, f"clause_{i}")
         paragraph.add_run(f"{i}. {clause['扩展条款标题']}")
-        paragraph.style = 'Heading 2'
+        paragraph.style = 'Heading 3'  # 使用三级标题
         
         # 添加条款内容（移除换行符）
         content = clause['扩展条款正文'].replace('\n', ' ').strip()

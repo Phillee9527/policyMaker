@@ -65,7 +65,7 @@ class ProjectManager:
         """加载项目"""
         project_dir = os.path.join(self.base_dir, name)
         if not os.path.exists(project_dir):
-            raise ValueError(f"项目 '{name}' 不存在")
+            raise ValueError(f"���目 '{name}' 不存在")
         
         # 获取数据库实例
         db = Database(os.path.join(project_dir, 'clauses.db'))
@@ -133,6 +133,14 @@ class ProjectManager:
         st.session_state.db_path = os.path.join(project_dir, 'clauses.db')
         st.session_state.last_save_time = datetime.now()
         
+        # 加载其他信息选项卡配置
+        st.session_state.other_info_tabs = config['state'].get('other_info_tabs', [])
+        
+        # 如果insurance_data存在，确保other_info_data也被加载
+        if st.session_state.insurance_data:
+            if 'other_info_data' not in st.session_state.insurance_data:
+                st.session_state.insurance_data['other_info_data'] = config['state'].get('other_info_data', {})
+        
         return os.path.join(project_dir, 'clauses.db')
     
     def save_project(self, name):
@@ -166,7 +174,9 @@ class ProjectManager:
             'selected_clauses': st.session_state.get('selected_clauses', []),
             'filters': st.session_state.get('filters', {}),
             'search_term': st.session_state.get('search_term', ''),
-            'version_info': version_info  # 保存版本信息
+            'version_info': version_info,  # 保存版本信息
+            'other_info_tabs': st.session_state.get('other_info_tabs', []),  # 保存其他信息选项卡配置
+            'other_info_data': st.session_state.insurance_data.get('other_info_data', {}) if st.session_state.insurance_data else {}  # 保存其他信息数据
         }
         
         with open(config_path, 'w', encoding='utf-8') as f:
