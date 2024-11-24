@@ -65,7 +65,7 @@ class ProjectManager:
         """加载项目"""
         project_dir = os.path.join(self.base_dir, name)
         if not os.path.exists(project_dir):
-            raise ValueError(f"���目 '{name}' 不存在")
+            raise ValueError(f"目 '{name}' 不存在")
         
         # 获取数据库实例
         db = Database(os.path.join(project_dir, 'clauses.db'))
@@ -285,7 +285,7 @@ class ProjectManager:
             return None
 
 def render_project_manager():
-    st.sidebar.title("项目管理")
+    st.sidebar.title("🗂️ 项目管理")
     
     project_manager = ProjectManager()
     
@@ -297,45 +297,44 @@ def render_project_manager():
         if (now - st.session_state.last_auto_save).total_seconds() > 300:
             project_manager.save_project(st.session_state.project_name)
             st.session_state.last_auto_save = now
-            st.sidebar.success("项目已自动保存")
+            st.sidebar.success("✨ 项目已自动保存")
     
-    with st.sidebar.expander("新建项目", expanded=False):
-        project_name = st.text_input("项目名称")
-        project_desc = st.text_area("项目描述")
-        if st.button("创建项目"):
+    with st.sidebar.expander("✨ 新建项目", expanded=False):
+        project_name = st.text_input("📝 项目名称")
+        project_desc = st.text_area("📋 项目描述")
+        if st.button("🎯 创建项目"):
             if project_name:
                 success, message = project_manager.create_project(project_name, project_desc)
                 if success:
-                    st.success(message)
-                    # 如果是新建项目，设置项目名称
+                    st.success(f"🎉 {message}")
                     st.session_state.project_name = project_name
                     st.rerun()
                 else:
-                    st.error(message)
+                    st.error(f"❌ {message}")
             else:
-                st.error("请输入项目名称")
+                st.error("⚠️ 请输入项目名称")
     
-    with st.sidebar.expander("导入项目", expanded=False):
-        uploaded_file = st.file_uploader("选择项目文件", type=['zip'])
-        import_name = st.text_input("项目名称（导入）")
+    with st.sidebar.expander("📥 导入项目", expanded=False):
+        uploaded_file = st.file_uploader("📂 选择项目文件", type=['zip'])
+        import_name = st.text_input("📝 项目名称（导入）")
         if uploaded_file is not None and import_name:
             try:
                 project_manager.import_project(import_name, uploaded_file.read())
                 st.session_state.project_name = import_name
-                st.success(f"项目 '{import_name}' 导入成功")
+                st.success(f"🎉 项目 '{import_name}' 导入成功")
             except ValueError as e:
-                st.error(str(e))
+                st.error(f"❌ {str(e)}")
     
     if 'project_name' in st.session_state and st.session_state.project_name is not None:
-        if st.sidebar.button("手动保存当前项目"):
+        if st.sidebar.button("💾 手动保存当前项目"):
             project_manager.save_project(st.session_state.project_name)
-            st.sidebar.success("项目已手动保存")
+            st.sidebar.success("✨ 项目已手动保存")
     
     if 'project_name' in st.session_state and st.session_state.project_name is not None:
-        if st.sidebar.button("导出当前项目"):
+        if st.sidebar.button("📤 导出当前项目"):
             project_data = project_manager.export_project(st.session_state.project_name)
             st.download_button(
-                "点击下载项目文件",
+                "⬇️ 点击下载项目文件",
                 project_data,
                 file_name=f"{st.session_state.project_name}.zip",
                 mime="application/zip"
@@ -345,5 +344,5 @@ def render_project_manager():
         st.session_state.show_startup_message = True
     
     if st.session_state.show_startup_message:
-        st.info("项目文件每隔5分钟自动保存，默认保存在浏览器缓存中。如果导出了项目数据，则将自动保存在选择的导出位置。")
+        st.info("💡 项目文件每隔5分钟自动保存，默认保存在浏览器缓存中。如果导出了项目数据，则将自动保存在选择的导出位置。")
         st.session_state.show_startup_message = False

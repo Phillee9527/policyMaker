@@ -14,7 +14,8 @@ def render_version_tags(versions, current_version, on_version_select, on_version
         logger.debug(f"当前版本内容: {current_ver.content[:50]}...")
     
     # 显示版本历史和当前生效版本
-    st.write(f"版本历史（当前生效：V{current_version}）")
+    st.write(f"📚 版本历史（当前生效：V{current_version}）")
+    st.info("🔄 您可以在这里管理条款的不同版本，切换到需要的版本或创建新版本")
     
     # 使用下拉菜单选择版本
     version_options = [
@@ -27,7 +28,7 @@ def render_version_tags(versions, current_version, on_version_select, on_version
         logger.debug(f"  - V{v.version_number} ({v.created_at})")
     
     selected_idx = st.selectbox(
-        "选择版本",
+        "🔍 选择版本",
         range(len(version_options)),
         format_func=lambda x: version_options[x],
         key=f"version_select_{key_prefix}"

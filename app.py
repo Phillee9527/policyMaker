@@ -20,7 +20,7 @@ def init_session_state():
 
 def main():
     st.set_page_config(
-        page_title="保险方案生成平台",
+        page_title="📋 保险方案生成平台",
         page_icon="📋",
         layout="wide"
     )
@@ -88,14 +88,14 @@ def main():
     
     # 如果没有选择项目，显示提示信息
     if not st.session_state.project_name:
-        st.warning("请先选择或创建一个项目")
+        st.warning("🎯 请先选择或创建一个项目开始您的保险方案之旅~")
         return
     
-    # 显示当前项目名称（使用markdown以应用自定义样式）
-    st.markdown(f"# 项目：{st.session_state.project_name}")
+    # 显示当前项目名称
+    st.markdown(f"# 📁 项目：{st.session_state.project_name}")
     
     # 使用选项卡展示主要功能
-    tab1, tab2, tab3 = st.tabs(["投保信息", "条款管理", "生成方案"])
+    tab1, tab2, tab3 = st.tabs(["📝 投保信息", "📚 条款管理", "📄 生成方案"])
     
     with tab1:
         st.session_state.insurance_data = render_insurance_form()
@@ -104,49 +104,62 @@ def main():
         render_clause_manager()
     
     with tab3:
-        if not st.session_state.insurance_data:
-            st.warning("请先填写投保信息")
+        # 更安全地检查 insurance_data
+        insurance_data = st.session_state.get('insurance_data', {})
+        if not insurance_data:
+            st.warning("✍️ 还没有填写投保信息哦，让我们先去完善一下吧~")
             return
         
-        if not st.session_state.selected_clauses:
-            st.warning("请先选择扩展条款")
+        selected_clauses = st.session_state.get('selected_clauses', [])
+        if not selected_clauses:
+            st.warning("📌 还没有选择任何条款呢，去挑选一些合适的条款吧~")
             return
         
-        st.header("生成保险方案")
+        st.markdown("# 📄 生成保险方案")
+        st.info("🎨 选择您喜欢的格式，让我们为您生成一份完美的保险方案~")
         
         # 选择导出格式
         format = st.selectbox(
-            "选择格式",
+            "📎 选择格式",
             ["Markdown", "Word"],
-            key="generate_format"
+            key="generate_format",
+            help="Markdown格式支持在线预览，Word格式更适合打印"
         )
         
-        if st.button("生成方案"):
-            if format == "Markdown":
-                content = generate_document(
-                    st.session_state.insurance_data,
-                    st.session_state.selected_clauses,
-                    'markdown'
-                )
-                st.download_button(
-                    "下载Markdown文件",
-                    content,
-                    file_name="insurance_policy.md",
-                    mime="text/markdown"
-                )
-                st.markdown(content)
-            else:
-                docx_file = generate_document(
-                    st.session_state.insurance_data,
-                    st.session_state.selected_clauses,
-                    'docx'
-                )
-                st.download_button(
-                    "下载Word文件",
-                    docx_file,
-                    file_name="insurance_policy.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
+        if st.button("🚀 生成方案"):
+            with st.spinner("📊 正在精心排版您的保险方案..."):
+                try:
+                    if format == "Markdown":
+                        content = generate_document(
+                            insurance_data,
+                            selected_clauses,
+                            'markdown'
+                        )
+                        if content:
+                            st.download_button(
+                                "⬇️ 下载Markdown文件",
+                                content,
+                                file_name="insurance_policy.md",
+                                mime="text/markdown"
+                            )
+                            st.success("🎉 生成成功！以下是预览内容：")
+                            st.markdown(content)
+                    else:
+                        docx_file = generate_document(
+                            insurance_data,
+                            selected_clauses,
+                            'docx'
+                        )
+                        if docx_file:
+                            st.success("🎉 生成成功！")
+                            st.download_button(
+                                "⬇️ 下载Word文件",
+                                docx_file,
+                                file_name="insurance_policy.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+                except Exception as e:
+                    st.error(f"❌ 生成文档时出错：{str(e)}")
 
 if __name__ == "__main__":
     main()

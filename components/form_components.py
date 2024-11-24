@@ -91,21 +91,23 @@ def render_insurance_form():
     if 'insurance_data' not in st.session_state:
         st.session_state.insurance_data = {}
     
-    # 从session state获取已保存的数据
-    insurance_data = st.session_state.insurance_data or {}
+    # 从session state获取已保存的数据，确保有默认值
+    insurance_data = st.session_state.get('insurance_data', {}) or {}
     
     # 表单部分
     with st.form("insurance_form"):
-        section_header("投保人信息")
+        st.markdown("# 📋 投保人信息")
+        st.info("🎯 请填写投保人的基本信息，这些信息将出现在保险方案的开头部分")
         policyholder_name = st.text_area(
-            "名称",
+            "✍️ 名称",
             value=insurance_data.get('policyholder', ''),
             height=100
         )
         
-        section_header("被保险人信息")
+        st.markdown("# 👥 被保险人信息")
+        st.info("📝 被保险人是保险合同中受保护的主体，请认真填写相关信息")
         insured_name = st.text_area(
-            "被保险人名称",
+            "✍️ 被保险人名称",
             value=insurance_data.get('insured', {}).get('name', ''),
             height=100
         )
@@ -145,7 +147,9 @@ def render_insurance_form():
             value=insurance_data.get('insured', {}).get('contact', {}).get('postal_code', '')
         )
         
-        section_header("被保险人标的地址")
+        st.markdown("# 🏢 被保险人标的地址")
+        st.info("📍 这里填写被保险标的物所在的具体位置信息")
+        
         property_name = st.text_input(
             "标的名称",
             value=insurance_data.get('property', {}).get('name', '')
@@ -155,10 +159,11 @@ def render_insurance_form():
             value=insurance_data.get('property', {}).get('address', '')
         )
         
-        section_header("主险")
+        st.markdown("# 💰 主险")
+        st.info("📊 主险是保险方案的核心部分，请仔细填写各项数据")
         
         # 使用选项卡来展示不同部分
-        insurance_tabs = st.tabs(["物质损失", "第三者责任", "免赔额"])
+        insurance_tabs = st.tabs(["💼 物质损失", "⚖️ 第三者责任", "🔍 免赔额"])
         
         with insurance_tabs[0]:
             subsection_header("第一部分 物质损失")
@@ -265,9 +270,7 @@ def render_insurance_form():
                 hide_index=True
             )
         
-        submit_button = st.form_submit_button("保存信息")
-        
-        if submit_button:
+        if st.form_submit_button("💾 保存信息"):
             insurance_data = {
                 "policyholder": policyholder_name,
                 "insured": {
@@ -293,14 +296,15 @@ def render_insurance_form():
                 "other_info_data": st.session_state.insurance_data.get('other_info_data', {})
             }
             st.session_state.insurance_data = insurance_data
-            st.success("信息已保存")
+            st.success("🎉 信息已成功保存！")
     
     # 添加分隔线
     st.markdown("---")
     
     # 其他信息部分（移到表单后）
     st.markdown('<div class="other-info-container">', unsafe_allow_html=True)
-    st.markdown('<p class="other-info-title">其他信息</p>', unsafe_allow_html=True)
+    st.markdown('<p class="other-info-title">📑 其他信息</p>', unsafe_allow_html=True)
+    st.info("🔧 在这里可以添加和管理自定义的信息分类，让您的保险方案更加完整")
     
     # 初始化其他信息的选项卡配置
     if 'other_info_tabs' not in st.session_state:
@@ -334,7 +338,7 @@ def render_insurance_form():
     )
     
     # 添加新选项卡的按钮
-    if st.button("添加新选项卡", key="add_tab"):
+    if st.button("➕ 添加新选项卡", key="add_tab"):
         new_tab_id = f"tab{len(st.session_state.other_info_tabs) + 1}"
         st.session_state.other_info_tabs.append({
             "name": f"新选项卡{len(st.session_state.other_info_tabs) + 1}",
@@ -354,8 +358,8 @@ def render_insurance_form():
         # 渲染每个选项卡的内容
         for i, (tab, tab_content) in enumerate(zip(st.session_state.other_info_tabs, other_info_tabs)):
             with tab_content:
-                # 获取已保存的数据
-                saved_data = st.session_state.insurance_data.get('other_info_data', {}).get(
+                # 更安全地获取已保存的数据
+                saved_data = insurance_data.get('other_info_data', {}).get(
                     tab['id'],
                     [{"项目": "", "内容说明": ""}]
                 )
@@ -379,10 +383,12 @@ def render_insurance_form():
                         )
                     },
                     hide_index=True,
-                    key=f"other_info_table_{tab['id']}_{i}"  # 使用更具唯一性的key
+                    key=f"other_info_table_{tab['id']}_{i}"
                 )
                 
-                # 保存表格数据到session state
+                # 更安全地保存表格数据到session state
+                if 'insurance_data' not in st.session_state:
+                    st.session_state.insurance_data = {}
                 if 'other_info_data' not in st.session_state.insurance_data:
                     st.session_state.insurance_data['other_info_data'] = {}
                 st.session_state.insurance_data['other_info_data'][tab['id']] = tab_data.to_dict('records')

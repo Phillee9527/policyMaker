@@ -251,7 +251,8 @@ def render_clause_manager():
     db = Database()
     
     # 使用markdown渲染标题以应用样式
-    st.markdown("# 条款管理")
+    st.markdown("# 📚 条款管理")
+    st.info("🎯 在这里您可以管理条款库，导入新条款，选择需要的条款~")
     
     # 创建两个独立的容器
     left_container = st.container()
@@ -265,36 +266,43 @@ def render_clause_manager():
         with left_container:
             # 数据库操作按钮区域
             st.markdown('<div class="db-operations">', unsafe_allow_html=True)
+            st.markdown("### 🗄️ 数据库操作")
             
             db_col1, db_col2, db_col3 = st.columns(3)
             with db_col1:
-                if st.button("清空数据库"):
+                if st.button("🗑️ 清空数据库", help="清空所有条款数据，请谨慎操作"):
                     db.clear_database()
                     st.session_state.selected_clauses = []
-                    st.success("数据库已清空")
+                    st.success("🎉 数据库已清空")
                     st.rerun()
             
             with db_col2:
                 exported_db = db.export_database()
                 if exported_db:
                     st.download_button(
-                        "导出数据库",
+                        "⬇️ 导出数据库",
                         exported_db,
                         file_name="clauses.db",
-                        mime="application/octet-stream"
+                        mime="application/octet-stream",
+                        help="将当前条款库导出为数据库文件"
                     )
             
             with db_col3:
-                uploaded_db = st.file_uploader("导入数据库", type=['db'])
+                uploaded_db = st.file_uploader("📤 导入数据库", type=['db'], help="导入已有的条款库数据库文件")
                 if uploaded_db:
                     db.import_database(uploaded_db.read())
-                    st.success("数据库导入成功")
+                    st.success("🎉 数据库导入成功")
                     st.rerun()
             
             st.markdown('</div>', unsafe_allow_html=True)
             
             # 文件上传区域
-            uploaded_file = st.file_uploader("导入条款库", type=['csv', 'xlsx'])
+            st.markdown("### 📥 条款导入")
+            uploaded_file = st.file_uploader(
+                "选择文件",
+                type=['csv', 'xlsx'],
+                help="支持 CSV 或 Excel 格式的条款库文件"
+            )
             if uploaded_file is not None:
                 try:
                     if uploaded_file.name.endswith('.csv'):
@@ -302,27 +310,28 @@ def render_clause_manager():
                     else:
                         df = pd.read_excel(uploaded_file)
                     db.import_clauses(df)
-                    st.success("条款库导入成功！")
+                    st.success("🎉 条款库导入成功！")
                 except Exception as e:
-                    st.error(f"文件导入错误：{str(e)}")
+                    st.error(f"❌ 文件导入错误：{str(e)}")
             
             # 筛选条件部分
-            st.markdown("## 筛选条件")
+            st.markdown("## 🔍 筛选条件")
             render_clause_list(db)
     
     # 右侧已选条款区域
     with col2:
         with right_container:
-            st.markdown(f"## 已选条款 (共{len(st.session_state.selected_clauses)}个)")
+            st.markdown(f"## 📋 已选条款 (共{len(st.session_state.selected_clauses)}个)")
             if st.session_state.selected_clauses:
                 # 导出选项
                 export_format = st.selectbox(
-                    "导出格式",
+                    "📤 导出格式",
                     ["XLSX", "DOCX", "Markdown"],
-                    key="export_format"
+                    key="export_format",
+                    help="选择导出文件的格式"
                 )
                 
-                if st.button("导出选中条款"):
+                if st.button("📥 导出选中条款"):
                     export_data = export_clauses(
                         st.session_state.selected_clauses,
                         export_format.lower()
@@ -330,21 +339,21 @@ def render_clause_manager():
                     
                     if export_format == "XLSX":
                         st.download_button(
-                            "下载Excel文件",
+                            "⬇️ 下载Excel文件",
                             export_data,
                             file_name="selected_clauses.xlsx",
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         )
                     elif export_format == "DOCX":
                         st.download_button(
-                            "下载Word文件",
+                            "⬇️ 下载Word文件",
                             export_data,
                             file_name="selected_clauses.docx",
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                         )
                     elif export_format == "Markdown":
                         st.download_button(
-                            "下载Markdown文件",
+                            "⬇️ 下载Markdown文件",
                             export_data,
                             file_name="selected_clauses.md",
                             mime="text/markdown"
@@ -354,9 +363,7 @@ def render_clause_manager():
                 with st.container():
                     render_selected_clauses(st.session_state.selected_clauses, db)
             else:
-                st.info("还未选择任何条款")
-    
-    logger.debug("=== 条款管理界面渲染结束 ===\n")
+                st.info("🤔 还未选择任何条款，快去左侧挑选几个吧~")
 
 def render_clause_list(db):
     """渲染条款列表和筛选功能"""
