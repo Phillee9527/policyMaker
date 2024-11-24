@@ -1,0 +1,12 @@
+{
+  "name": "556",
+  "description": "dfgdsf",
+  "created_at": "2024-11-24T21:52:21.475653",
+  "updated_at": "2024-11-24T21:52:21.475663",
+  "state": {
+    "insurance_data": null,
+    "selected_clauses": [],
+    "filters": {},
+    "search_term": ""
+  }
+}

@@ -8,6 +8,10 @@ from sqlalchemy.orm import sessionmaker, relationship
 import io
 import streamlit as st
 import uuid
+import logging
+
+# 添加 logger
+logger = logging.getLogger(__name__)
 
 # 创建基类
 Base = declarative_base()
@@ -87,33 +91,41 @@ class Database:
         elif db_path is None:
             db_path = 'clauses.db'
         
-        # 确保数据库目录存在
-        db_dir = os.path.dirname(os.path.abspath(db_path))
-        if not os.path.exists(db_dir):
-            os.makedirs(db_dir)
-        
-        # 确保数据库文件所在目录有写权限
         try:
-            # 尝试创建一个临时文件来测试写权
-            test_file = os.path.join(db_dir, '.test')
-            with open(test_file, 'w') as f:
-                f.write('test')
-            os.remove(test_file)
+            # 确保数据库目录存在
+            db_dir = os.path.dirname(os.path.abspath(db_path))
+            if not os.path.exists(db_dir):
+                try:
+                    os.makedirs(db_dir, exist_ok=True, mode=0o755)  # 设置目录权限
+                except Exception as e:
+                    st.error(f"无法创建数据库目录: {str(e)}")
+                    raise
+            
+            # 检查目录权限
+            if not os.access(db_dir, os.W_OK):
+                st.error(f"数据库目录没有写权限: {db_dir}")
+                # 尝试修改目录权限
+                try:
+                    os.chmod(db_dir, 0o755)
+                except Exception as e:
+                    st.error(f"无法修改目录权限: {str(e)}")
+                    raise
+            
+            self.db_path = db_path
+            self.engine = create_engine(f'sqlite:///{db_path}')
+            Base.metadata.create_all(self.engine)
+            Session = sessionmaker(bind=self.engine)
+            self.session = Session()
+            
+            # 导出类型供外部使用
+            self.Clause = Clause
+            self.ClauseVersion = ClauseVersion
+            self.InsurancePolicy = InsurancePolicy
+            self.PolicyClauseVersion = PolicyClauseVersion
+            
         except Exception as e:
-            st.error(f"数库���录没有写权限: {str(e)}")
+            st.error(f"数据库初始化失败: {str(e)}")
             raise
-        
-        self.db_path = db_path
-        self.engine = create_engine(f'sqlite:///{db_path}')
-        Base.metadata.create_all(self.engine)
-        Session = sessionmaker(bind=self.engine)
-        self.session = Session()
-        
-        # 导出类型供外部使用
-        self.Clause = Clause
-        self.ClauseVersion = ClauseVersion
-        self.InsurancePolicy = InsurancePolicy
-        self.PolicyClauseVersion = PolicyClauseVersion
 
     def create_policy(self, name, description=""):
         """创建保险方案"""
@@ -371,55 +383,48 @@ class Database:
             return content
 
     def update_clause(self, uuid, title=None, content=None, version_note=None):
-        """更新条款内容"""
-        clause = self.session.query(Clause).filter_by(uuid=uuid).first()
-        if clause:
-            # 获取最新版本号
-            latest_version = self.session.query(ClauseVersion).filter_by(
-                clause_uuid=uuid
-            ).order_by(ClauseVersion.version_number.desc()).first()
-            
-            # 检查内容是否真的有变化
-            if latest_version and latest_version.content == content:
-                return True  # 内容没有变化，不需要创建新版本
-            
-            new_version_number = (latest_version.version_number + 1) if latest_version else 1
-            
-            # 创建新版本记录
-            version = ClauseVersion(
-                clause_uuid=clause.uuid,
-                version_number=new_version_number,
-                title=title if title else clause.title,
-                content=content,
-                note=version_note if version_note else "手动更新",
-                created_at=datetime.utcnow()
-            )
-            self.session.add(version)
-            
-            # 更新条款基本信息
-            if title:
-                clause.title = title
-            clause.content = content
-            clause.version_number = new_version_number  # 自动切换到新版本
-            clause.updated_at = version.created_at
-            
-            # 提交更改
-            self.session.commit()
-            
-            # 更新session state中的条款内容
-            if 'selected_clauses' in st.session_state:
-                st.session_state.selected_clauses = [
-                    {
-                        **c,
-                        '扩展���款正文': content,
-                        '版本号': new_version_number,
-                        '扩展条款标题': title if title else c['扩展条款标题']
-                    } if c['UUID'] == uuid else c
-                    for c in st.session_state.selected_clauses
-                ]
-            
-            return True
-        return False
+        """更新条款内容，仅在编辑时调用"""
+        try:
+            clause = self.session.query(Clause).filter_by(uuid=uuid).first()
+            if clause:
+                # 获取最新版本号
+                latest_version = self.session.query(ClauseVersion).filter_by(
+                    clause_uuid=uuid
+                ).order_by(ClauseVersion.version_number.desc()).first()
+                
+                # 检查内容是否真的有变化
+                if latest_version and content == latest_version.content:
+                    return True  # 内容没有变化，不需要创建新版本
+                
+                new_version_number = (latest_version.version_number + 1) if latest_version else 1
+                
+                # 创建新版本记录
+                version = ClauseVersion(
+                    clause_uuid=clause.uuid,
+                    version_number=new_version_number,
+                    title=title if title else clause.title,
+                    content=content,
+                    note=version_note if version_note else "手动更新",
+                    created_at=datetime.utcnow()
+                )
+                self.session.add(version)
+                
+                # 更新条款基本信息
+                if title:
+                    clause.title = title
+                clause.content = content
+                clause.version_number = new_version_number  # 自动切换到新版本
+                clause.updated_at = version.created_at
+                
+                # 提交更改
+                self.session.commit()
+                
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"更新条款失败: {str(e)}")
+            self.session.rollback()
+            return False
 
     def get_clause_versions(self, uuid):
         """获取条款的所有版本"""
@@ -450,74 +455,50 @@ class Database:
         return versions
 
     def activate_clause_version(self, uuid, version_number):
-        """激活指定版本的条款"""
-        print(f"DEBUG: 开始激活版本 - UUID: {uuid}, 版本号: {version_number}")
-        
-        # 获取条款
-        clause = self.session.query(Clause).filter_by(uuid=uuid).first()
-        if not clause:
-            print("DEBUG: 未找到条款")
-            return False
-        
-        print(f"DEBUG: 当前条款版本号: {clause.version_number}")
-        
-        # 获取要激活的版本
-        version = self.session.query(ClauseVersion).filter_by(
-            clause_uuid=uuid,
-            version_number=version_number
-        ).first()
-        
-        if version:
-            try:
-                print(f"DEBUG: 找到目标版本 - 标题: {version.title}")
-                print(f"DEBUG: 目标版本内容: {version.content[:50]}...")
-                
-                # 更新当前条款为选中的版本
-                clause.title = version.title
-                clause.content = version.content
-                clause.version_number = version.version_number
-                clause.updated_at = datetime.utcnow()
-                
-                # 立即提交更改
-                self.session.commit()
-                print("DEBUG: 数据库更新成功")
-                
-                # 更新session state中的条款内容
-                if 'selected_clauses' in st.session_state:
-                    print("DEBUG: 开始更新session state中的条款")
-                    old_clauses = len(st.session_state.selected_clauses)
-                    st.session_state.selected_clauses = [
-                        {
-                            **c,
-                            '扩展条款正文': version.content,
-                            '版本号': version.version_number,
-                            '扩展条款标题': version.title
-                        } if c['UUID'] == uuid else c
-                        for c in st.session_state.selected_clauses
-                    ]
-                    print(f"DEBUG: 更新后的条款数量: {len(st.session_state.selected_clauses)}")
+        """激活指定版本的条款，仅在切换版本时调用"""
+        try:
+            # 获取指定版本
+            version = self.session.query(ClauseVersion).filter_by(
+                clause_uuid=uuid,
+                version_number=version_number
+            ).first()
+            
+            if version:
+                # 获取条款
+                clause = self.session.query(Clause).filter_by(uuid=uuid).first()
+                if clause:
+                    # 直接更新条款的版本号和内容，不创建新版本
+                    clause.version_number = version_number
+                    clause.content = version.content
+                    clause.title = version.title
+                    clause.updated_at = datetime.utcnow()
                     
-                    # 强制保存到数据库
-                    if 'current_policy_id' in st.session_state:
-                        print("DEBUG: 保存更改到保险方案")
-                        clause_uuids = [c['UUID'] for c in st.session_state.selected_clauses]
-                        self.save_policy_clauses(st.session_state.current_policy_id, clause_uuids)
-                
-                # 强制刷新session state中的版本信息
-                if 'version_info' not in st.session_state:
-                    st.session_state.version_info = {}
-                st.session_state.version_info[uuid] = version_number
-                print(f"DEBUG: 更新version_info: {st.session_state.version_info}")
-                
-                return True
-                
-            except Exception as e:
-                self.session.rollback()
-                print(f"DEBUG: 版本切换失败: {str(e)}")
-                return False
-        
-        print("DEBUG: 未找到目标版本")
-        return False
+                    # 提交更改
+                    self.session.commit()
+                    
+                    # 更新session state中的条款内容
+                    if 'selected_clauses' in st.session_state:
+                        st.session_state.selected_clauses = [
+                            {
+                                **c,
+                                '扩展条款正文': version.content,
+                                '版本号': version_number,
+                                '扩展条款标题': version.title
+                            } if c['UUID'] == uuid else c
+                            for c in st.session_state.selected_clauses
+                        ]
+                    
+                    # 更新version_info
+                    if 'version_info' not in st.session_state:
+                        st.session_state.version_info = {}
+                    st.session_state.version_info[uuid] = version_number
+                    
+                    return True
+            return False
+        except Exception as e:
+            logger.error(f"激活条款版本失败: {str(e)}")
+            self.session.rollback()
+            return False
 
     def delete_clause_version(self, uuid, version_number):
         """删除指定版的条款"""

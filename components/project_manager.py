@@ -170,13 +170,13 @@ class ProjectManager:
         
         config['updated_at'] = datetime.now().isoformat()
         config['state'] = {
-            'insurance_data': st.session_state.get('insurance_data', None),
+            'insurance_data': st.session_state.get('insurance_data', {}),
             'selected_clauses': st.session_state.get('selected_clauses', []),
             'filters': st.session_state.get('filters', {}),
             'search_term': st.session_state.get('search_term', ''),
-            'version_info': version_info,  # 保存版本信息
-            'other_info_tabs': st.session_state.get('other_info_tabs', []),  # 保存其他信息选项卡配置
-            'other_info_data': st.session_state.insurance_data.get('other_info_data', {}) if st.session_state.insurance_data else {}  # 保存其他信息数据
+            'version_info': version_info,
+            'other_info_tabs': st.session_state.get('other_info_tabs', []),
+            'other_info_data': (st.session_state.get('insurance_data', {}) or {}).get('other_info_data', {})
         }
         
         with open(config_path, 'w', encoding='utf-8') as f:

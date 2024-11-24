@@ -39,6 +39,15 @@ def render_version_tags(versions, current_version, on_version_select, on_version
     logger.debug(f"选中的版本号: {selected_version.version_number}")
     logger.debug(f"选中版本内容: {selected_version.content[:50]}...")
     
+    # 显示选中版本的内容（只读）
+    st.text_area(
+        "版本内容预览",
+        value=selected_version.content,
+        height=200,
+        disabled=True,
+        key=f"preview_{key_prefix}"
+    )
+    
     # 如果选中的版本不是当前版本，显示切换按钮和对比按钮
     if selected_version.version_number != current_version:
         col1, col2 = st.columns(2)
@@ -51,72 +60,67 @@ def render_version_tags(versions, current_version, on_version_select, on_version
                 logger.info(f"版本切换结果: {success}")
                 
                 if success:
-                    # 强制更新session state
-                    if 'version_info' not in st.session_state:
-                        st.session_state.version_info = {}
-                    st.session_state.version_info[key_prefix] = selected_version.version_number
-                    
-                    # 更新selected_clauses
-                    for clause in st.session_state.selected_clauses:
-                        if clause['UUID'] == key_prefix:
-                            clause['版本号'] = selected_version.version_number
-                            clause['扩展条款标题'] = selected_version.title
-                            clause['扩展条款正文'] = selected_version.content
-                            break
-                    
-                    # 强制重新渲染
+                    st.success(f"已切换到版本 V{selected_version.version_number}")
                     st.rerun()
-                    
+        
         with col2:
             if st.button("与当前版本对比", key=f"compare_{key_prefix}_{selected_version.version_number}"):
                 if current_ver:
                     show_version_diff(current_ver, selected_version)
     
-    # 显示选中版本的内容
-    st.markdown("### 当前显示的版本内容")
-    st.markdown(selected_version.content)
-    
     # 编辑功能
-    if st.button("编辑条款", key=f"edit_{key_prefix}"):
-        st.session_state[f"editing_{key_prefix}"] = True
-        print(f"进入编辑模式: {key_prefix}")
+    st.markdown("### 编辑条款")
     
-    # 如果处于编辑状态，显示编辑器
-    if st.session_state.get(f"editing_{key_prefix}", False):
+    # 添加编辑按钮
+    if 'editing_mode' not in st.session_state:
+        st.session_state.editing_mode = {}
+    
+    if st.button("✏️ 开始编辑", key=f"edit_{key_prefix}"):
+        st.session_state.editing_mode[key_prefix] = True
+        st.rerun()
+    
+    # 只在编辑模式下显示编辑区域
+    if st.session_state.editing_mode.get(key_prefix):
         edited_content = st.text_area(
-            "编辑条款内容",
-            value=selected_version.content,
+            "编辑区域",
+            value=current_ver.content if current_ver else "",
             height=300,
-            key=f"edit_area_{key_prefix}"
+            key=f"edit_area_active_{key_prefix}"
         )
         
         version_note = st.text_input("版本说明", key=f"version_note_{key_prefix}")
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("保存为新版本", key=f"save_{key_prefix}"):
-                print(f"\n=== 保存新版本 ===")
-                print(f"条款: {key_prefix}")
-                print(f"版本说明: {version_note}")
-                print(f"新内容: {edited_content[:50]}...")
-                st.session_state[f"editing_{key_prefix}"] = False
-                return edited_content, True, version_note
+            if st.button("💾 保存为新版本", key=f"save_{key_prefix}"):
+                if edited_content != current_ver.content:  # 只有内容有变化时才创建新版本
+                    success = on_version_select(None, edited_content, version_note)
+                    if success:
+                        st.session_state.editing_mode[key_prefix] = False
+                        st.success("已保存为新版本")
+                        st.rerun()
+                else:
+                    st.warning("内容没有变化，无需创建新版本")
+        
         with col2:
-            if st.button("取消", key=f"cancel_{key_prefix}"):
-                print(f"取消编辑: {key_prefix}")
-                st.session_state[f"editing_{key_prefix}"] = False
+            if st.button("❌ 取消编辑", key=f"cancel_{key_prefix}"):
+                st.session_state.editing_mode[key_prefix] = False
+                st.rerun()
+        
+        return edited_content, True, version_note
     
-    print("=== 版本标签渲染结束 ===\n")
-    return selected_version.content, False, ""
+    return current_ver.content if current_ver else "", False, ""
 
 def show_version_diff(old_version, new_version):
     """显示版本之间的差异"""
-    d = difflib.Differ()
-    diff = list(d.compare(old_version.content.splitlines(), new_version.content.splitlines()))
-    
     st.markdown("### 版本差异对比")
     st.markdown(f"对比 V{old_version.version_number} 和 V{new_version.version_number}")
     
+    # 使用difflib进行文本对比
+    d = difflib.Differ()
+    diff = list(d.compare(old_version.content.splitlines(), new_version.content.splitlines()))
+    
+    # 显示差异
     for line in diff:
         if line.startswith('+'):
             st.markdown(f'<p style="color: green">{line}</p>', unsafe_allow_html=True)

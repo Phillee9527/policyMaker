@@ -186,8 +186,19 @@ def render_insurance_form():
                 </style>
                 """, unsafe_allow_html=True)
                 
-                # 获取已保存的物质损失数据
-                saved_material_loss = insurance_data.get('material_loss', [{"标的类别": "", "保险金额（元）": "", "费率（%）": "", "保费（元）": ""}] * 3)
+                # 获取已保存的物质损失数据，确保至少有一行空数据
+                saved_material_loss = insurance_data.get('material_loss', [{"标的类别": "", "保险金额（元）": "", "费率（%）": "", "保费（元）": ""}])
+                
+                # 确保所有行都有完整的列
+                for row in saved_material_loss:
+                    if "标的类别" not in row:
+                        row["标的类别"] = ""
+                    if "保险金额（元）" not in row:
+                        row["保险金额（元）"] = ""
+                    if "费率（%）" not in row:
+                        row["费率（%）"] = ""
+                    if "保费（元）" not in row:
+                        row["保费（元）"] = ""
                 
                 # 使用可编辑的数据表格
                 material_loss_data = st.data_editor(
@@ -198,25 +209,25 @@ def render_insurance_form():
                         "标的类别": st.column_config.TextColumn(
                             "标的类别",
                             width="medium",
-                            required=True
+                            required=False  # 改为不必填
                         ),
                         "保险金额（元）": st.column_config.NumberColumn(
                             "保险金额（元）",
                             width="medium",
                             format="%.2f",
-                            required=True
+                            required=False  # 改为不必填
                         ),
                         "费率（%）": st.column_config.NumberColumn(
                             "费率（%）",
                             width="medium",
                             format="%.4f",
-                            required=True
+                            required=False  # 改为不必填
                         ),
                         "保费（元）": st.column_config.NumberColumn(
                             "保费（元）",
                             width="medium",
                             format="%.2f",
-                            required=True
+                            required=False  # 改为不必填
                         )
                     }
                 )
@@ -224,8 +235,17 @@ def render_insurance_form():
         with insurance_tabs[1]:
             subsection_header("第二部分 第三者责任")
             
-            # 获取已保存的第三者责任数据
-            saved_liability = insurance_data.get('liability', [{"限额名称": "", "责任限额（元）": "", "保费（元）": ""}] * 3)
+            # 获取已保存的第三者责任数据，确保至少有一行空数据
+            saved_liability = insurance_data.get('liability', [{"限额名称": "", "责任限额（元）": "", "保费（元）": ""}])
+            
+            # 确保所有行都有完整的列
+            for row in saved_liability:
+                if "限额名称" not in row:
+                    row["限额名称"] = ""
+                if "责任限额（元）" not in row:
+                    row["责任限额（元）"] = ""
+                if "保费（元）" not in row:
+                    row["保费（元）"] = ""
             
             liability_data = st.data_editor(
                 pd.DataFrame(saved_liability),
@@ -235,19 +255,19 @@ def render_insurance_form():
                     "限额名称": st.column_config.TextColumn(
                         "限额名称",
                         width="medium",
-                        required=True
+                        required=False  # 改为不必填
                     ),
                     "责任限额（元）": st.column_config.NumberColumn(
                         "责任限额（元）",
                         width="medium",
                         format="%.2f",
-                        required=True
+                        required=False  # 改为不必填
                     ),
                     "保费（元）": st.column_config.NumberColumn(
                         "保费（元）",
                         width="medium",
                         format="%.2f",
-                        required=True
+                        required=False  # 改为不必填
                     )
                 }
             )
@@ -255,8 +275,15 @@ def render_insurance_form():
         with insurance_tabs[2]:
             subsection_header("免赔额")
             
-            # 获取已保存的免赔额数据
+            # 获取已保存的免赔额数据，确保至少有一行空数据
             saved_deductibles = insurance_data.get('deductibles', [{"免赔项目": "", "免赔额 / 免赔约定": ""}])
+            
+            # 确保所有行都有完整的列
+            for row in saved_deductibles:
+                if "免赔项目" not in row:
+                    row["免赔项目"] = ""
+                if "免赔额 / 免赔约定" not in row:
+                    row["免赔额 / 免赔约定"] = ""
             
             deductibles_data = st.data_editor(
                 pd.DataFrame(saved_deductibles),
@@ -266,12 +293,12 @@ def render_insurance_form():
                     "免赔项目": st.column_config.TextColumn(
                         "免赔项目",
                         width="small",
-                        required=True
+                        required=False  # 改为不必填
                     ),
                     "免赔额 / 免赔约定": st.column_config.TextColumn(
                         "免赔额 / 免赔约定",
                         width="large",
-                        required=True,
+                        required=False,  # 改为不必填
                         max_chars=1000
                     )
                 },
@@ -309,7 +336,7 @@ def render_insurance_form():
     # 添加分隔线
     st.markdown("---")
     
-    # 其他信息部分（移到表单后）
+    # 其他信息部分
     st.markdown('<div class="other-info-container">', unsafe_allow_html=True)
     st.markdown('<p class="other-info-title">📑 其他信息</p>', unsafe_allow_html=True)
     st.info("🔧 在这里可以添加和管理自定义的信息分类，让您的保险方案更加完整")
@@ -345,16 +372,6 @@ def render_insurance_form():
         key="tabs_editor"
     )
     
-    # 添加新选项卡的按钮
-    if st.button("➕ 添加新选项卡", key="add_tab"):
-        new_tab_id = f"tab{len(st.session_state.other_info_tabs) + 1}"
-        st.session_state.other_info_tabs.append({
-            "name": f"新选项卡{len(st.session_state.other_info_tabs) + 1}",
-            "id": new_tab_id,
-            "order": len(st.session_state.other_info_tabs)
-        })
-        st.rerun()
-    
     # 更新选项卡配置
     st.session_state.other_info_tabs = edited_tabs.to_dict('records')
     
@@ -363,31 +380,43 @@ def render_insurance_form():
         tab_names = [tab["name"] for tab in st.session_state.other_info_tabs]
         other_info_tabs = st.tabs(tab_names)
         
+        # 初始化或获取其他信息数据
+        if 'insurance_data' not in st.session_state:
+            st.session_state.insurance_data = {}
+        if 'other_info_data' not in st.session_state.insurance_data:
+            st.session_state.insurance_data['other_info_data'] = {}
+        
         # 渲染每个选项卡的内容
         for i, (tab, tab_content) in enumerate(zip(st.session_state.other_info_tabs, other_info_tabs)):
             with tab_content:
-                # 更安全地获取已保存的数据
-                other_info_data = insurance_data.get('other_info_data', {})
-                saved_data = other_info_data.get(
+                # 获取当前选项卡的数据，确保至少有一行空数据
+                current_tab_data = st.session_state.insurance_data.get('other_info_data', {}).get(
                     tab['id'],
                     [{"项目": "", "内容说明": ""}]
                 )
                 
+                # 确保所有行都有完整的列
+                for row in current_tab_data:
+                    if "项目" not in row:
+                        row["项目"] = ""
+                    if "内容说明" not in row:
+                        row["内容说明"] = ""
+                
                 # 创建数据编辑器，使用唯一的key
                 tab_data = st.data_editor(
-                    pd.DataFrame(saved_data),
+                    pd.DataFrame(current_tab_data),
                     num_rows="dynamic",
                     use_container_width=True,
                     column_config={
                         "项目": st.column_config.TextColumn(
                             "项目",
                             width="small",
-                            required=True
+                            required=False  # 改为不必填
                         ),
                         "内容说明": st.column_config.TextColumn(
                             "内容说明",
                             width="large",
-                            required=True,
+                            required=False,  # 改为不必填
                             max_chars=1000
                         )
                     },
@@ -395,9 +424,43 @@ def render_insurance_form():
                     key=f"other_info_table_{tab['id']}_{i}"
                 )
                 
-                # 更安全地保存表格数据
-                insurance_data['other_info_data'][tab['id']] = tab_data.to_dict('records')
+                # 添加保存按钮
+                if st.button("💾 保存此选项卡内容", key=f"save_tab_{tab['id']}"):
+                    # 保存前确保数据结构完整
+                    if 'insurance_data' not in st.session_state:
+                        st.session_state.insurance_data = {}
+                    if 'other_info_data' not in st.session_state.insurance_data:
+                        st.session_state.insurance_data['other_info_data'] = {}
+                    
+                    # 处理数据，确保空值也被保存
+                    saved_data = []
+                    for _, row in tab_data.iterrows():
+                        saved_data.append({
+                            "项目": row["项目"] if pd.notna(row["项目"]) else "",
+                            "内容说明": row["内容说明"] if pd.notna(row["内容说明"]) else ""
+                        })
+                    
+                    # 只更新当前选项卡的数据，保留其他选项卡的数据
+                    st.session_state.insurance_data['other_info_data'][tab['id']] = saved_data
+                    st.success("✨ 内容已保存")
+    
+    # 添加全部保存按钮
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("💾 保存所有其他信息", key="save_all_other_info"):
+            # 确保数据被正确保存到 session_state
+            if 'insurance_data' not in st.session_state:
+                st.session_state.insurance_data = {}
+            
+            # 保存选项卡配置
+            st.session_state.insurance_data['other_info_tabs'] = st.session_state.other_info_tabs
+            
+            # 确保 other_info_data 存在
+            if 'other_info_data' not in st.session_state.insurance_data:
+                st.session_state.insurance_data['other_info_data'] = {}
+            
+            st.success("🎉 所有其他信息已保存！")
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    return insurance_data
+    return st.session_state.insurance_data

@@ -16,7 +16,7 @@ def export_clauses(clauses, format):
     clause_uuids = [clause['UUID'] for clause in clauses]
     return db.export_selected_clauses(clause_uuids, format)
 
-def handle_version_select(db, clause_uuid, version_number, clause):
+def handle_version_select(db, clause_uuid, version_number, clause, content=None, version_note=None):
     """处理版本选择"""
     logger.info(f"\n=== 处理版本选择 ===")
     logger.info(f"条款UUID: {clause_uuid}")
@@ -24,68 +24,40 @@ def handle_version_select(db, clause_uuid, version_number, clause):
     logger.info(f"当前版本号: {clause.get('版本号', 1)}")
     
     try:
-        # 获取要切换到的版本
-        version = db.session.query(db.ClauseVersion).filter_by(
-            clause_uuid=clause_uuid,
-            version_number=version_number
-        ).first()
-        
-        if version:
-            # 更新当前条款对象
-            clause_obj = db.session.query(db.Clause).filter_by(uuid=clause_uuid).first()
-            if clause_obj:
-                # 更新条款对象
-                clause_obj.title = version.title
-                clause_obj.content = version.content
-                clause_obj.version_number = version.version_number
-                clause_obj.updated_at = version.created_at
-                
-                # 提交更改
-                db.session.commit()
-                
-                # 更新session state中的条款内容
-                updated_clauses = []
-                for c in st.session_state.selected_clauses:
-                    if c['UUID'] == clause_uuid:
-                        logger.info(f"更新条款内容：从 V{c['版本号']} 到 V{version_number}")
-                        c = c.copy()  # 创建副本以确保状态更新
-                        c['版本号'] = version_number
-                        c['扩展条款标题'] = version.title
-                        c['扩展条款正文'] = version.content
-                    updated_clauses.append(c)
-                
-                # 更新整个selected_clauses列表
-                st.session_state.selected_clauses = updated_clauses
-                
-                # 确保version_info存在并更新
+        if version_number is None and content is not None:
+            # 创建新版本
+            return db.update_clause(clause_uuid, content=content, version_note=version_note)
+        else:
+            # 切换到指定版本
+            success = db.activate_clause_version(clause_uuid, version_number)
+            if success:
+                # 更新 session_state
                 if 'version_info' not in st.session_state:
                     st.session_state.version_info = {}
                 st.session_state.version_info[clause_uuid] = version_number
                 
+                # 更新 selected_clauses
+                for clause in st.session_state.selected_clauses:
+                    if clause['UUID'] == clause_uuid:
+                        version = db.get_clause_version_by_clause_uuid(clause_uuid)
+                        if version:
+                            clause['版本号'] = version_number
+                            clause['扩展条款标题'] = version.title
+                            clause['扩展条款正文'] = version.content
+                            break
+                
                 # 保存到数据库
                 if 'current_policy_id' in st.session_state:
-                    success = db.save_policy_clauses(
+                    db.save_policy_clauses(
                         st.session_state.current_policy_id,
                         [c['UUID'] for c in st.session_state.selected_clauses]
                     )
-                    logger.info(f"保存到数据库: {'成功' if success else '失败'}")
                 
-                logger.info(f"版本切换成功，新版本号: {version_number}")
-                logger.info(f"version_info更新后: {st.session_state.version_info}")
-                
-                # 强制重新渲染前清理缓存
-                for key in list(st.session_state.keys()):
-                    if key.startswith('data_editor_'):
-                        del st.session_state[key]
-                
-                # 强制重新渲染
-                st.rerun()
                 return True
-                
+            return False
     except Exception as e:
         logger.error(f"版本切换失败: {str(e)}")
-        db.session.rollback()
-    return False
+        return False
 
 def handle_version_delete(db, clause_uuid, version_number):
     """处理版本删除"""
@@ -131,45 +103,49 @@ def render_clause_content(clause, db):
     """渲染条款内容编辑器"""
     logger.debug(f"\n=== 开始渲染条款内容 ===")
     logger.debug(f"条款UUID: {clause['UUID']}")
-    logger.debug(f"当前版本号: {clause.get('版本号', 1)}")
+    
+    # 确保 version_info 存在
+    if 'version_info' not in st.session_state:
+        st.session_state.version_info = {}
+    
+    # 获取当前版本号
+    current_version = st.session_state.version_info.get(
+        clause['UUID'], 
+        clause.get('版本号', 1)
+    )
+    
+    logger.debug(f"当前版本号: {current_version}")
     
     with st.expander(f"{clause['扩展条款标题']}", expanded=False):
         try:
             # 获取所有版本
             versions = db.get_clause_versions(clause['UUID'])
-            logger.debug(f"获取到版本数量: {len(versions)}")
             
-            # 从session state获取当前版本号
-            current_version = st.session_state.version_info.get(
-                clause['UUID'], 
-                clause.get('版本号', 1)
-            )
-            
-            def handle_version_select_wrapper(version_number):
-                """处理版本选择装函数"""
+            def handle_version_select_wrapper(version_number, content=None, version_note=None):
+                """处理版本选择的包装函数"""
+                if content is not None:
+                    # 检查内容是否真的有变化
+                    current_version = next((v for v in versions if v.version_number == version_number), None)
+                    if current_version and current_version.content == content:
+                        return True
                 return handle_version_select(db, clause['UUID'], version_number, clause)
             
             # 渲染版本标签
-            try:
-                content, should_save, version_note = render_version_tags(
-                    versions,
-                    current_version,
-                    handle_version_select_wrapper,
-                    handle_version_delete,
-                    clause['UUID'],
-                    clause['扩展条款正文']
-                )
-                
-                # 如果需要保存新版本
-                if should_save:
-                    logger.info("保存新版本")
-                    if db.update_clause(clause['UUID'], content=content, version_note=version_note):
-                        st.success("新版本保存成功")
-                        st.rerun()
-            except Exception as e:
-                logger.error(f"渲染版本标签时出错: {str(e)}")
-                st.error(f"渲染版本标签时出错: {str(e)}")
-        
+            content, should_save, version_note = render_version_tags(
+                versions,
+                current_version,
+                handle_version_select_wrapper,
+                handle_version_delete,
+                clause['UUID'],
+                clause['扩展条款正文']
+            )
+            
+            # 只有当内容真的改变时才保存新版本
+            if should_save and content != clause['扩展条款正文']:
+                if db.update_clause(clause['UUID'], content=content, version_note=version_note):
+                    st.success("新版本保存成功")
+                    st.rerun()
+            
         except Exception as e:
             logger.error(f"渲染条款内容时出错: {str(e)}")
             st.error(f"渲染条款内容时出错: {str(e)}")
@@ -223,7 +199,7 @@ def render_selected_clauses(clauses, db, page_size=25):
         if st.button("▶️", disabled=st.session_state.current_page >= total_pages, key="next_page", help="下一页"):
             st.session_state.current_page += 1
     
-    # 末页按钮
+    # 末页钮
     with c5:
         if st.button("⏭️", disabled=st.session_state.current_page >= total_pages, key="last_page", help="末页"):
             st.session_state.current_page = total_pages
@@ -246,6 +222,12 @@ def render_selected_clauses(clauses, db, page_size=25):
 def render_clause_manager():
     """渲染条款管理界面"""
     logger.debug("\n=== 开始渲染条款管理界面 ===")
+    
+    # 初始化 session state
+    if 'selected_clauses' not in st.session_state:
+        st.session_state.selected_clauses = []
+    if 'version_info' not in st.session_state:
+        st.session_state.version_info = {}
     
     # 初始化数据库
     db = Database()
@@ -376,7 +358,7 @@ def render_clause_list(db):
         
         # 动态生成筛选框
         filters = {}
-        exclude_columns = ['UUID', 'PINYIN', 'QUANPIN', '扩展条款正文', '序号', '版本号']
+        exclude_columns = ['UUID', 'PINYIN', 'QUANPIN', '扩展条正文', '序号', '版本号']
         filter_columns = [col for col in clauses_df.columns if col not in exclude_columns]
         
         for i, col in enumerate(filter_columns):
@@ -435,54 +417,56 @@ def render_clause_list(db):
             # 全选功能
             col1, col2 = st.columns(2)
             
-            # 初始化select_all状态
-            if 'select_all_state' not in st.session_state:
-                st.session_state.select_all_state = False
-            
             with col1:
-                select_all = st.checkbox("全选当前筛选结果", 
-                                       key="select_all",
-                                       value=st.session_state.select_all_state)
-                
-                # 更新select_all状态
-                st.session_state.select_all_state = select_all
+                if st.button("全选当前筛选结果", key="select_all"):
+                    # 获取当前筛选结果的所有条款
+                    for _, row in filtered_df.iterrows():
+                        # 检查是否已经选择
+                        if not any(c['UUID'] == row['UUID'] for c in st.session_state.selected_clauses):
+                            # 准备新的条款数据
+                            new_clause = {
+                                'UUID': row['UUID'],
+                                '序号': len(st.session_state.selected_clauses) + 1,
+                                '扩展条款标题': row['扩展条款标题'],
+                                '扩展条款正文': row['扩展条款正文'],
+                                'PINYIN': row['PINYIN'],
+                                'QUANPIN': row['QUANPIN'],
+                                '险种': row['险种'],
+                                '保险公司': row['保险公司'],
+                                '年度版本': row['年度版本'],
+                                '版本号': row['版本号']
+                            }
+                            st.session_state.selected_clauses.append(new_clause)
+                    st.rerun()
             
             with col2:
-                if st.button("取消全选当前结果", key="cancel_all"):
-                    # 不直接修改checkbox状态，而是通过session_state
-                    st.session_state.select_all_state = False
-                    # 清空当前筛选结果的选择
-                    if not filtered_df.empty:
-                        current_uuids = filtered_df['UUID'].tolist()
-                        st.session_state.selected_clauses = [
-                            clause for clause in st.session_state.selected_clauses 
-                            if clause['UUID'] not in current_uuids
-                        ]
-                        # 立即保存到数据库
-                        handle_clause_selection(db, True)
-                        st.rerun()
+                if st.button("❌ 取消全选当前结果", key="cancel_all"):
+                    # 获取当前筛选结果的UUID列表
+                    current_uuids = set(filtered_df['UUID'].tolist())
+                    # 保留不在当前筛选结果中的条款
+                    st.session_state.selected_clauses = [
+                        clause for clause in st.session_state.selected_clauses 
+                        if clause['UUID'] not in current_uuids
+                    ]
+                    # 重新编号
+                    for idx, clause in enumerate(st.session_state.selected_clauses, 1):
+                        clause['序号'] = idx
+                    st.rerun()
             
-            # 如果全选被勾选，更新选择状态
-            if st.session_state.select_all_state:
-                # 直接将所有筛选后的条款添加到selected_clauses
-                st.session_state.selected_clauses = filtered_df.to_dict('records')
-                selection_array = np.ones(len(display_df), dtype=bool)
-                # 立即保存到数据库
-                handle_clause_selection(db, True)
-            else:
-                selection_array = np.zeros(len(display_df), dtype=bool)
-                # 检查当前行是否已被选中
-                for i in range(len(display_df)):
-                    if any(c['UUID'] == display_df.iloc[i]['UUID'] for c in st.session_state.selected_clauses):
-                        selection_array[i] = True
-            
+            # 显示数据表格
             edited_df = pd.DataFrame({
-                "选择": selection_array,
+                "选择": [False] * len(display_df),
                 "序号": display_df['序号'].astype(str),
                 "条款名称": display_df['扩展条款标题'],
                 "条款正文": display_df['扩展条款正文'].str[:100] + '...',
                 "版本": display_df['版本号'].astype(str)
             })
+            
+            # 更新选择状态
+            selected_uuids = {c['UUID'] for c in st.session_state.selected_clauses}
+            for i, row in display_df.iterrows():
+                if row['UUID'] in selected_uuids:
+                    edited_df.at[i, '选择'] = True
             
             # 显示数据表格
             edited_result = st.data_editor(
@@ -524,47 +508,37 @@ def render_clause_list(db):
                 }
             )
             
-            # 处理单选择
-            if not select_all:
-                # 取当前页面选中的行
-                current_page_selected = []
-                selection_changed = False
+            # 处理选择变更
+            for i, (is_selected, row) in enumerate(zip(edited_result['选择'], display_df.iterrows())):
+                uuid = row[1]['UUID']
+                current_selected = uuid in selected_uuids
                 
-                for i, is_selected in enumerate(edited_result['选择']):
-                    clause_data = display_df.iloc[i].to_dict()
-                    current_selected = any(c['UUID'] == clause_data['UUID'] for c in st.session_state.selected_clauses)
-                    
-                    if is_selected and not current_selected:
-                        current_page_selected.append(clause_data)
-                        selection_changed = True
-                    elif not is_selected and current_selected:
-                        selection_changed = True
-                
-                if selection_changed:
-                    # 移除当前页面取消选择的条款
-                    st.session_state.selected_clauses = [
-                        clause for clause in st.session_state.selected_clauses
-                        if clause['UUID'] not in [
-                            display_df.iloc[i]['UUID']
-                            for i, is_selected in enumerate(edited_result['选择'])
-                            if not is_selected
+                if is_selected != current_selected:
+                    if is_selected:
+                        # 添加新选择的条款
+                        new_clause = {
+                            'UUID': uuid,
+                            '序号': len(st.session_state.selected_clauses) + 1,
+                            '扩展条款标题': row[1]['扩展条款标题'],
+                            '扩展条款正文': row[1]['扩展条款正文'],
+                            'PINYIN': row[1]['PINYIN'],
+                            'QUANPIN': row[1]['QUANPIN'],
+                            '险种': row[1]['险种'],
+                            '保险公司': row[1]['保险公司'],
+                            '年度版本': row[1]['年度版本'],
+                            '版本号': row[1]['版本号']
+                        }
+                        st.session_state.selected_clauses.append(new_clause)
+                        st.rerun()
+                    else:
+                        # 移除取消选择的条款
+                        st.session_state.selected_clauses = [
+                            c for c in st.session_state.selected_clauses 
+                            if c['UUID'] != uuid
                         ]
-                    ]
-                    
-                    # 添加新选择的条款
-                    st.session_state.selected_clauses.extend(current_page_selected)
-                    
-                    # 立即保存到数据库
-                    handle_clause_selection(db, True)
-                    
-                    # 使用session_state来控制刷新
-                    if 'refresh_counter' not in st.session_state:
-                        st.session_state.refresh_counter = 0
-                    st.session_state.refresh_counter += 1
-                    
-                    # 每隔几次选择才刷新一次页面
-                    if st.session_state.refresh_counter >= 3:
-                        st.session_state.refresh_counter = 0
+                        # 重新编号
+                        for idx, clause in enumerate(st.session_state.selected_clauses, 1):
+                            clause['序号'] = idx
                         st.rerun()
         else:
             st.info("没找到匹配的条款")

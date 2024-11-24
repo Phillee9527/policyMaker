@@ -202,10 +202,10 @@ def generate_docx(insurance_data, selected_clauses):
     
     for item in insurance_data['material_loss']:
         row_cells = table.add_row().cells
-        row_cells[0].text = str(item['标的类别'])
-        row_cells[1].text = str(item['保险金额（元）'])
-        row_cells[2].text = str(item['费率（%）'])
-        row_cells[3].text = str(item['保费（元）'])
+        row_cells[0].text = str(item['标的类别']) if item['标的类别'] not in [None, 'None'] else ''
+        row_cells[1].text = str(item['保险金额（元）']) if item['保险金额（元）'] not in [None, 'None'] else ''
+        row_cells[2].text = str(item['费率（%）']) if item['费率（%）'] not in [None, 'None'] else ''
+        row_cells[3].text = str(item['保费（元）']) if item['保费（元）'] not in [None, 'None'] else ''
     
     # 第三者责任表格
     doc.add_heading('第二部分 第三者责任', level=3)  # 使用三级标题
@@ -218,9 +218,9 @@ def generate_docx(insurance_data, selected_clauses):
     
     for item in insurance_data['liability']:
         row_cells = table.add_row().cells
-        row_cells[0].text = str(item['限额名称'])
-        row_cells[1].text = str(item['责任限额（元）'])
-        row_cells[2].text = str(item['保费（元）'])
+        row_cells[0].text = str(item['限额名称']) if item['限额名称'] not in [None, 'None'] else ''
+        row_cells[1].text = str(item['责任限额（元）']) if item['责任限额（元）'] not in [None, 'None'] else ''
+        row_cells[2].text = str(item['保费（元）']) if item['保费（元）'] not in [None, 'None'] else ''
     
     # 免赔额表格
     doc.add_heading('第三部分 免赔额', level=3)  # 使用三级标题
@@ -232,8 +232,8 @@ def generate_docx(insurance_data, selected_clauses):
     
     for item in insurance_data['deductibles']:
         row_cells = table.add_row().cells
-        row_cells[0].text = str(item['免赔项目'])
-        row_cells[1].text = str(item['免赔额 / 免赔约定'])
+        row_cells[0].text = str(item['免赔项目']) if item['免赔项目'] not in [None, 'None'] else ''
+        row_cells[1].text = str(item['免赔额 / 免赔约定']) if item['免赔额 / 免赔约定'] not in [None, 'None'] else ''
     
     # 添加其他信息部分
     if 'other_info_tabs' in insurance_data and 'other_info_data' in insurance_data:
@@ -251,8 +251,8 @@ def generate_docx(insurance_data, selected_clauses):
                 
                 for item in tab_data:
                     row_cells = table.add_row().cells
-                    row_cells[0].text = str(item['项目'])
-                    row_cells[1].text = str(item['内容说明'])
+                    row_cells[0].text = str(item['项目']) if item['项目'] not in [None, 'None'] else ''
+                    row_cells[1].text = str(item['内容说明']) if item['内容说明'] not in [None, 'None'] else ''
     
     # 特别约定
     if 'special_terms' in insurance_data and insurance_data['special_terms']:
