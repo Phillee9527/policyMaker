@@ -84,6 +84,26 @@ def generate_markdown(insurance_data, selected_clauses):
     for item in insurance_data['liability']:
         markdown += f"| {item['限额名称']} | {item['责任限额（元）']} | {item['保费（元）']} |\n"
     
+    # 添加免赔额表格
+    markdown += "\n## 第三部分 免赔额\n"
+    markdown += "\n| 免赔项目 | 免赔额 / 免赔约定 |\n"
+    markdown += "|----------|------------------|\n"
+    for item in insurance_data['deductibles']:
+        markdown += f"| {item['免赔项目']} | {item['免赔额 / 免赔约定']} |\n"
+    
+    # 添加其他信息部分
+    if 'other_info_tabs' in insurance_data and 'other_info_data' in insurance_data:
+        markdown += "\n# 其他信息\n"
+        
+        for tab in insurance_data['other_info_tabs']:
+            tab_data = insurance_data['other_info_data'].get(tab['id'], [])
+            if tab_data:
+                markdown += f"\n## {tab['name']}\n"
+                markdown += "\n| 项目 | 内容说明 |\n"
+                markdown += "|------|----------|\n"
+                for item in tab_data:
+                    markdown += f"| {item['项目']} | {item['内容说明']} |\n"
+    
     # 添加特别约定
     if 'special_terms' in insurance_data and insurance_data['special_terms']:
         markdown += "\n# 特别约定\n\n"
@@ -180,6 +200,38 @@ def generate_docx(insurance_data, selected_clauses):
         row_cells[0].text = str(item['限额名称'])
         row_cells[1].text = str(item['责任限额（元）'])
         row_cells[2].text = str(item['保费（元）'])
+    
+    # 免赔额表格
+    doc.add_heading('第三部分 免赔额', level=2)
+    table = doc.add_table(rows=1, cols=2)
+    table.style = 'Table Grid'
+    header_cells = table.rows[0].cells
+    header_cells[0].text = '免赔项目'
+    header_cells[1].text = '免赔额 / 免赔约定'
+    
+    for item in insurance_data['deductibles']:
+        row_cells = table.add_row().cells
+        row_cells[0].text = str(item['免赔项目'])
+        row_cells[1].text = str(item['免赔额 / 免赔约定'])
+    
+    # 添加其他信息部分
+    if 'other_info_tabs' in insurance_data and 'other_info_data' in insurance_data:
+        doc.add_heading('其他信息', level=1)
+        
+        for tab in insurance_data['other_info_tabs']:
+            tab_data = insurance_data['other_info_data'].get(tab['id'], [])
+            if tab_data:
+                doc.add_heading(tab['name'], level=2)
+                table = doc.add_table(rows=1, cols=2)
+                table.style = 'Table Grid'
+                header_cells = table.rows[0].cells
+                header_cells[0].text = '项目'
+                header_cells[1].text = '内容说明'
+                
+                for item in tab_data:
+                    row_cells = table.add_row().cells
+                    row_cells[0].text = str(item['项目'])
+                    row_cells[1].text = str(item['内容说明'])
     
     # 特别约定
     if 'special_terms' in insurance_data and insurance_data['special_terms']:
