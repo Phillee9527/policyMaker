@@ -21,6 +21,7 @@ def handle_version_select(db, clause_uuid, version_number, clause):
     logger.info(f"\n=== 处理版本选择 ===")
     logger.info(f"条款UUID: {clause_uuid}")
     logger.info(f"目标版本号: {version_number}")
+    logger.info(f"当前版本号: {clause.get('版本号', 1)}")
     
     try:
         # 获取要切换到的版本
@@ -43,27 +44,42 @@ def handle_version_select(db, clause_uuid, version_number, clause):
                 db.session.commit()
                 
                 # 更新session state中的条款内容
+                updated_clauses = []
                 for c in st.session_state.selected_clauses:
                     if c['UUID'] == clause_uuid:
                         logger.info(f"更新条款内容：从 V{c['版本号']} 到 V{version_number}")
+                        c = c.copy()  # 创建副本以确保状态更新
                         c['版本号'] = version_number
                         c['扩展条款标题'] = version.title
                         c['扩展条款正文'] = version.content
-                        break
+                    updated_clauses.append(c)
                 
-                # 更新version_info
+                # 更新整个selected_clauses列表
+                st.session_state.selected_clauses = updated_clauses
+                
+                # 确保version_info存在并更新
                 if 'version_info' not in st.session_state:
                     st.session_state.version_info = {}
                 st.session_state.version_info[clause_uuid] = version_number
                 
                 # 保存到数据库
                 if 'current_policy_id' in st.session_state:
-                    db.save_policy_clauses(
+                    success = db.save_policy_clauses(
                         st.session_state.current_policy_id,
                         [c['UUID'] for c in st.session_state.selected_clauses]
                     )
+                    logger.info(f"保存到数据库: {'成功' if success else '失败'}")
                 
-                logger.info("版本切换成功")
+                logger.info(f"版本切换成功，新版本号: {version_number}")
+                logger.info(f"version_info更新后: {st.session_state.version_info}")
+                
+                # 强制重新渲染前清理缓存
+                for key in list(st.session_state.keys()):
+                    if key.startswith('data_editor_'):
+                        del st.session_state[key]
+                
+                # 强制重新渲染
+                st.rerun()
                 return True
                 
     except Exception as e:
@@ -386,7 +402,7 @@ def render_clause_list(db):
         
         # 搜索框
         search_term = st.text_input(
-            "搜索条���",
+            "搜索条",
             placeholder="输入条款名称、拼音或关键词",
             help="支持条款名称、拼音首字母和全拼搜索"
         )
@@ -430,11 +446,23 @@ def render_clause_list(db):
             
             # 全选功能
             col1, col2 = st.columns(2)
+            
+            # 初始化select_all状态
+            if 'select_all_state' not in st.session_state:
+                st.session_state.select_all_state = False
+            
             with col1:
-                select_all = st.checkbox("全选当前筛选结果", key="select_all")
+                select_all = st.checkbox("全选当前筛选结果", 
+                                       key="select_all",
+                                       value=st.session_state.select_all_state)
+                
+                # 更新select_all状态
+                st.session_state.select_all_state = select_all
+            
             with col2:
-                if st.button("取消全选当前结果"):
-                    st.session_state.select_all = False
+                if st.button("取消全选当前结果", key="cancel_all"):
+                    # 不直接修改checkbox状态，而是通过session_state
+                    st.session_state.select_all_state = False
                     # 清空当前筛选结果的选择
                     if not filtered_df.empty:
                         current_uuids = filtered_df['UUID'].tolist()
@@ -447,7 +475,7 @@ def render_clause_list(db):
                         st.rerun()
             
             # 如果全选被勾选，更新选择状态
-            if select_all:
+            if st.session_state.select_all_state:
                 # 直接将所有筛选后的条款添加到selected_clauses
                 st.session_state.selected_clauses = filtered_df.to_dict('records')
                 selection_array = np.ones(len(display_df), dtype=bool)
