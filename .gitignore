@@ -9,3 +9,9 @@ venv/
 projects/*
 # 但是保留 projects 文件夹本身
 !projects/.gitkeep
+
+# 忽略 logs 文件夹下的所有内容
+logs/*
+# 但是保留 logs 文件夹本身
+!logs/.gitkeep
+
