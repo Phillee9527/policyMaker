@@ -5,7 +5,8 @@ import shutil
 import zipfile
 import io
 from datetime import datetime
-from .database import Database
+from .database import Database, Base, ClauseVersion
+import sqlite3
 
 class ProjectManager:
     def __init__(self, base_dir='projects'):
@@ -17,56 +18,144 @@ class ProjectManager:
             st.session_state.last_save_time = datetime.now()
     
     def create_project(self, name, description=""):
+        """创建项目或打开已存在的项目"""
         project_dir = os.path.join(self.base_dir, name)
+        
+        # 如果项目已存在
         if os.path.exists(project_dir):
-            raise ValueError(f"项目 '{name}' 已存在")
+            try:
+                # 尝试加载已存在的项目
+                self.load_project(name)
+                # 更新session state
+                st.session_state.project_name = name
+                return True, f"项目 '{name}' 已存在，已为您打开"
+            except Exception as e:
+                return False, f"打开已存在的项目失败: {str(e)}"
         
-        os.makedirs(project_dir)
-        
-        config = {
-            "name": name,
-            "description": description,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
-            "state": {
-                "insurance_data": None,
-                "selected_clauses": [],
-                "filters": {},
-                "search_term": ""
+        try:
+            # 创建新项目
+            os.makedirs(project_dir)
+            
+            config = {
+                "name": name,
+                "description": description,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat(),
+                "state": {
+                    "insurance_data": None,
+                    "selected_clauses": [],
+                    "filters": {},
+                    "search_term": ""
+                }
             }
-        }
-        
-        with open(os.path.join(project_dir, 'config.json'), 'w', encoding='utf-8') as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
-        
-        db = Database(os.path.join(project_dir, 'clauses.db'))
-        
-        return self.load_project(name)
+            
+            with open(os.path.join(project_dir, 'config.json'), 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+            
+            # 创建数据库并初始化保险方案
+            db = Database(os.path.join(project_dir, 'clauses.db'))
+            policy = db.create_policy(name, description)
+            st.session_state.current_policy_id = policy.id
+            
+            return True, f"项目 '{name}' 创建成功"
+        except Exception as e:
+            return False, f"创建项目失败: {str(e)}"
     
     def load_project(self, name):
+        """加载项目"""
         project_dir = os.path.join(self.base_dir, name)
         if not os.path.exists(project_dir):
             raise ValueError(f"项目 '{name}' 不存在")
         
+        # 获取数据库实例
+        db = Database(os.path.join(project_dir, 'clauses.db'))
+        
+        # 加载配置文件
         with open(os.path.join(project_dir, 'config.json'), 'r', encoding='utf-8') as f:
             config = json.load(f)
         
+        # 获取或创建保险方案
+        policies = db.session.query(db.InsurancePolicy).all()
+        st.write(f"找到的保险方案数量：{len(policies)}")
+        
+        if policies:
+            policy = policies[0]  # 使用第一个保险方案
+            st.write(f"使用现有保险方案，ID：{policy.id}")
+        else:
+            policy = db.create_policy(name, config.get('description', ''))
+            st.write(f"创建新保险方案，ID：{policy.id}")
+        
+        st.session_state.current_policy_id = policy.id
+        
+        # 获取保险方案关联的条款UUID列表
+        clause_uuids = db.get_policy_clause_uuids(policy.id)
+        st.write(f"从数据库加载的条款数量：{len(clause_uuids)}")
+        
+        # 根据UUID列表构建selected_clauses
+        updated_selected_clauses = []
+        for uuid in clause_uuids:
+            # 获取条款的最新版本
+            latest_version = db.get_clause_version_by_clause_uuid(uuid)
+            if latest_version:
+                clause = db.session.query(db.Clause).filter_by(uuid=uuid).first()
+                if clause:
+                    updated_clause = {
+                        'UUID': uuid,
+                        '序号': len(updated_selected_clauses) + 1,
+                        '扩展条款标题': latest_version.title,
+                        '扩展条款正文': latest_version.content,
+                        'PINYIN': clause.pinyin,
+                        'QUANPIN': clause.quanpin,
+                        '险种': clause.insurance_type,
+                        '保险公司': clause.company,
+                        '年度版本': clause.version,
+                        '版本号': latest_version.version_number
+                    }
+                    updated_selected_clauses.append(updated_clause)
+        
+        st.write(f"成功加载的条款数量：{len(updated_selected_clauses)}")
+        
+        # 初始化 version_info
+        if 'version_info' not in st.session_state:
+            st.session_state.version_info = {}
+        
+        # 更新 version_info
+        for clause in updated_selected_clauses:
+            st.session_state.version_info[clause['UUID']] = clause['版本号']
+        
+        # 更新session state
         st.session_state.project_name = name
         st.session_state.project_dir = project_dir
         st.session_state.insurance_data = config['state']['insurance_data']
-        st.session_state.selected_clauses = config['state']['selected_clauses']
-        st.session_state.filters = config['state']['filters']
-        st.session_state.search_term = config['state']['search_term']
+        st.session_state.selected_clauses = updated_selected_clauses
+        st.session_state.filters = config['state'].get('filters', {})
+        st.session_state.search_term = config['state'].get('search_term', '')
         st.session_state.db_path = os.path.join(project_dir, 'clauses.db')
         st.session_state.last_save_time = datetime.now()
         
         return os.path.join(project_dir, 'clauses.db')
     
     def save_project(self, name):
+        """保存项目"""
         project_dir = os.path.join(self.base_dir, name)
         if not os.path.exists(project_dir):
             raise ValueError(f"项目 '{name}' 不存在")
         
+        # 获取数据库实例
+        db = Database(os.path.join(project_dir, 'clauses.db'))
+        
+        # 保存已选条款到数据库
+        if 'current_policy_id' in st.session_state:
+            clause_uuids = []
+            version_info = {}  # 用于存储每个条款的当前版本号
+            
+            for clause in st.session_state.get('selected_clauses', []):
+                clause_uuids.append(clause['UUID'])
+                version_info[clause['UUID']] = clause.get('版本号', 1)
+            
+            db.save_policy_clauses(st.session_state.current_policy_id, clause_uuids)
+        
+        # 更新配置文件
         config_path = os.path.join(project_dir, 'config.json')
         with open(config_path, 'r', encoding='utf-8') as f:
             config = json.load(f)
@@ -76,12 +165,14 @@ class ProjectManager:
             'insurance_data': st.session_state.get('insurance_data', None),
             'selected_clauses': st.session_state.get('selected_clauses', []),
             'filters': st.session_state.get('filters', {}),
-            'search_term': st.session_state.get('search_term', '')
+            'search_term': st.session_state.get('search_term', ''),
+            'version_info': version_info  # 保存版本信息
         }
         
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
         
+        # 导出项目数据
         project_data = self.export_project(name)
         
         return project_data
@@ -139,6 +230,38 @@ class ProjectManager:
             with zipfile.ZipFile(memory_zip, 'r') as zf:
                 zf.extractall(project_dir)
             
+            # 处理数据库升级
+            db_path = os.path.join(project_dir, 'clauses.db')
+            if os.path.exists(db_path):
+                # 备份原数据库
+                shutil.copy2(db_path, f"{db_path}.bak")
+                
+                # 创建新数据库
+                from .database import Database, Base
+                db = Database(db_path)
+                Base.metadata.create_all(db.engine)
+                
+                try:
+                    # 迁移数据
+                    old_db = sqlite3.connect(f"{db_path}.bak")
+                    new_db = sqlite3.connect(db_path)
+                    
+                    # 复制数据
+                    old_db.backup(new_db)
+                    
+                    # 关闭连接
+                    old_db.close()
+                    new_db.close()
+                    
+                    # 删除备份
+                    os.remove(f"{db_path}.bak")
+                except Exception as e:
+                    st.error(f"数据库升级失败: {str(e)}")
+                    # 恢复备份
+                    if os.path.exists(f"{db_path}.bak"):
+                        shutil.copy2(f"{db_path}.bak", db_path)
+                        os.remove(f"{db_path}.bak")
+            
             # 加载项目
             return self.load_project(name)
         except Exception as e:
@@ -171,12 +294,14 @@ def render_project_manager():
         project_desc = st.text_area("项目描述")
         if st.button("创建项目"):
             if project_name:
-                try:
-                    project_manager.create_project(project_name, project_desc)
-                    st.success(f"项目 '{project_name}' 创建成功")
+                success, message = project_manager.create_project(project_name, project_desc)
+                if success:
+                    st.success(message)
+                    # 如果是新建项目，设置项目名称
                     st.session_state.project_name = project_name
-                except ValueError as e:
-                    st.error(str(e))
+                    st.rerun()
+                else:
+                    st.error(message)
             else:
                 st.error("请输入项目名称")
     

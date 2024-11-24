@@ -1,0 +1,12 @@
+{
+  "name": "huayu",
+  "description": "huayun",
+  "created_at": "2024-11-24T07:15:54.279980",
+  "updated_at": "2024-11-24T07:15:54.279989",
+  "state": {
+    "insurance_data": null,
+    "selected_clauses": [],
+    "filters": {},
+    "search_term": ""
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "hongya",
+  "description": "hongyang",
+  "created_at": "2024-11-24T07:34:29.999745",
+  "updated_at": "2024-11-24T07:34:29.999752",
+  "state": {
+    "insurance_data": null,
+    "selected_clauses": [],
+    "filters": {},
+    "search_term": ""
+  }
+}

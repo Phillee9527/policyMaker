@@ -1,0 +1,12 @@
+{
+  "name": "nihao3",
+  "description": "nidfsd2",
+  "created_at": "2024-11-24T07:57:30.642453",
+  "updated_at": "2024-11-24T07:57:30.642461",
+  "state": {
+    "insurance_data": null,
+    "selected_clauses": [],
+    "filters": {},
+    "search_term": ""
+  }
+}
