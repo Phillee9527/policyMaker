@@ -119,7 +119,7 @@ def show_welcome_screen():
         if st.button("🎮 点击进入主程序", key="enter_button"):
             st.session_state.welcome_completed = True
             st.balloons()  # 放飞气球效果
-            st.experimental_rerun()
+            st.rerun()
 
 def should_show_welcome():
     """判断是否应该显示欢迎页面"""
