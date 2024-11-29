@@ -18,7 +18,7 @@ class Logger:
             os.makedirs('logs')
         
         # 创建以日期命名的日志文件
-        log_file = os.path.join('logs', f'debug_{datetime.now().strftime("%Y%m%d")}.log')
+        log_file = os.path.join('logs', f'default_{datetime.now().strftime("%Y%m%d")}.log')
         
         # 配置日志记录器
         self.logger = logging.getLogger('PolicyMaker')
